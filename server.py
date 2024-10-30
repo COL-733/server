@@ -1,6 +1,42 @@
+from multiprocessing import Process
+from ring import Ring
+from message import Cmd
+# from collections import deque
+from queue import Queue
+    
 class ServerInfo:
-    def __init__(self, name: str, port: int):
+    def __init__(self, name: str, ip: str, switch_ip: str , port: int):
+        self.ip: str = ip
+        self.switch: str = switch_ip # or directly socket
         self.name: str = name
         self.port: int = port
         
+class Server(Process):
+    def __init__(self, info: ServerInfo, ring: Ring):
+        super(Server, self).__init__(name=info.name)
+        self.info: ServerInfo = info
+        self.ring: Ring = ring
+        self.cmdQueue: Queue[Cmd] = [] 
+        # storage optional
+
+    def _processRequests():
+        pass
+
+    def _cmd_handler():
+        pass
+
+    def _get():
+        pass
+
+    def _set():
+        pass
+    
+    def gossip(): # Thread
+        pass
+
+    def sendHintedHandoffs(): # Thread
+        pass
+
+    def _recv():
+        pass
 
