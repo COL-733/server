@@ -19,6 +19,9 @@ class Server(Process):
         self.cmdQueue: Queue[Cmd] = [] 
         # storage optional
 
+    def _recv():
+        pass
+
     def _processRequests():
         pass
 
@@ -30,13 +33,12 @@ class Server(Process):
 
     def _set():
         pass
-    
+
+    def _send(): # Thread
+        pass
+
     def gossip(): # Thread
         pass
 
     def sendHintedHandoffs(): # Thread
         pass
-
-    def _recv():
-        pass
-
