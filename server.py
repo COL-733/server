@@ -4,8 +4,8 @@ from message import MessageType
 from storage import Storage
 import socket
 # from collections import deque
-import queue
-    
+import queue 
+from message import MessageType
 class ServerInfo:
     def __init__(self, name: str, ip: str, switch_ip: str , port: int):
         self.ip: str = ip
@@ -38,7 +38,7 @@ class Server(Process):
     def put():
         pass
 
-    def send():
+    def send(self, message: MessageType, to: str):
         pass
 
     def gossip(): # Thread
@@ -49,7 +49,7 @@ class Server(Process):
 
     def run():
         # Start the server process
-        cmd_q = queue.
+        # cmd_q = queue.
         # Start the recv thread
         # Start the cmd handler thread.
         pass

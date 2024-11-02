@@ -19,14 +19,14 @@ class VirtualNode:
         return self.pos < other.pos
 
 class Ring:
-    def __init__(self, numTokens, name):
+    def __init__(self, numTokens, server):
         self.state: SortedList[VirtualNode] = SortedList()
-        self.name = name
+        self.server = server
         self.N = config.N
         self.lock = Lock()
 
         for _ in range(numTokens):
-            self.state.add(VirtualNode(name))
+            self.state.add(VirtualNode(server))
     
     def _hash(self, key: str):
         md5 = hashlib.md5(key.encode())
@@ -58,3 +58,5 @@ class Ring:
                 break
         
         return prefList
+
+    
