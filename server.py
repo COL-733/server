@@ -1,6 +1,7 @@
 from multiprocessing import Process
 from ring import Ring
 from message import Cmd
+from storage import Storage
 # from collections import deque
 from queue import Queue
     
@@ -16,8 +17,8 @@ class Server(Process):
         super(Server, self).__init__(name=info.name)
         self.info: ServerInfo = info
         self.ring: Ring = ring
+        self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.info.name}_storage')
         self.cmdQueue: Queue[Cmd] = [] 
-        # storage optional
 
     def _recv():
         pass
