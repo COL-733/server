@@ -8,7 +8,6 @@ import queue
 import time
 
 SWITCH_PORT = 2000
-        
 class Server(Process):
     def __init__(self, switch_name: str, switch_ip: str, port: int):
         self.name: str = f'{switch_name}_{port}'
@@ -50,7 +49,7 @@ class Server(Process):
     def put():
         pass
 
-    def send():
+    def send(self, message: MessageType, to: str):
         pass
 
     def gossip(): # Thread
@@ -62,8 +61,6 @@ class Server(Process):
     def run(self):
         # command queue
         cmd_q = queue.Queue()
-
-
 
         # Start the recv thread
         # Start the cmd handler thread.
