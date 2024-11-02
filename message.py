@@ -1,6 +1,6 @@
 from enum import Enum
 
-class Cmd(Enum):
+class MessageType(Enum):
     PUT = 1
     GET = 2
     GOSSIP_REQUEST = 3

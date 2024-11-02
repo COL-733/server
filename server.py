@@ -1,9 +1,10 @@
 from multiprocessing import Process
 from ring import Ring
-from message import Cmd
+from message import MessageType
 from storage import Storage
+import socket
 # from collections import deque
-from queue import Queue
+import queue
     
 class ServerInfo:
     def __init__(self, name: str, ip: str, switch_ip: str , port: int):
@@ -13,29 +14,31 @@ class ServerInfo:
         self.port: int = port
         
 class Server(Process):
-    def __init__(self, info: ServerInfo, ring: Ring):
-        super(Server, self).__init__(name=info.name)
-        self.info: ServerInfo = info
-        self.ring: Ring = ring
+    def __init__(self, switch_name: str, switch_ip: str):
+        super(Server, self).__init__()
+        self.name: str
+        self.switch: str = switch_ip
+        self.socket: socket.socket 
+        self.ring: Ring
         self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.info.name}_storage')
-        self.cmdQueue: Queue[Cmd] = [] 
+        self.cmdQueue: queue[MessageType] 
 
-    def _recv():
+    def recv():
         pass
 
-    def _processRequests():
+    def processRequests():
         pass
 
-    def _cmd_handler():
+    def cmd_handler(): # thread
         pass
 
-    def _get():
+    def get():
         pass
 
-    def _set():
+    def put():
         pass
 
-    def _send(): # Thread
+    def send():
         pass
 
     def gossip(): # Thread
@@ -43,3 +46,12 @@ class Server(Process):
 
     def sendHintedHandoffs(): # Thread
         pass
+
+    def run():
+        # Start the server process
+        cmd_q = queue.
+        # Start the recv thread
+        # Start the cmd handler thread.
+        pass
+
+
