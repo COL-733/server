@@ -53,6 +53,7 @@ class Server(Process):
     def receive_from_switch(self) -> None:
         """Thread to receive messages from Switch."""
         while True:
+            print("Thread")
             try:
                 response, _ = self.socket.recvfrom(1024)
                 msg: Message = Message.deserialize(response)
@@ -194,5 +195,5 @@ class Server(Process):
 
 if __name__=="__main__":
     server = Server(sys.argv[1],"",int(sys.argv[2]),{})
+    print("sent")
     server.run()
-    server.send(Message(1,MessageType.GET,server.name,"switch",{}))

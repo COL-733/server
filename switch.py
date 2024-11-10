@@ -12,7 +12,6 @@ class Switch:
         self.socket.bind(('', PORT))
         self.socket.listen(5)
         self.servers: dict[str, socket.socket] = dict()
-        self.connectServerLoop()
 
     def run(self):
         recvThd = Thread(target=self.recvThd)
@@ -20,6 +19,7 @@ class Switch:
 
     def recvThd(self):
         while True:
+            print("run")
             try:
                 response, _ = self.socket.recvfrom(1024)
                 message: Message = Message.deserialize(response)
@@ -53,3 +53,6 @@ class Switch:
 
 if __name__=="__main__":
     switch = Switch(sys.argv[1], {})
+    print("run")
+    switch.run()
+    switch.connectServerLoop()
