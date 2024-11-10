@@ -12,6 +12,15 @@ class Switch:
         self.servers: dict[str, socket.socket] = dict()
         self.connectServerLoop()
 
+    def recvThd(self):
+        while True:
+            try:
+                response, _ = self.socket.recvfrom(1024)
+                message: Message = Message.deserialize(response)
+                self.forward(message)
+            except Exception as e:
+                print(f"Error: {e}")
+
     def connectServerLoop(self):
         while True:
             c, addr = self.socket.accept()
