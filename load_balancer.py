@@ -1,6 +1,7 @@
 import socket
 import time
 from multiprocessing import Process
+from message import Message
 
 LB_PORT = 3000
 SWITCH_PORT = 2000
@@ -23,3 +24,11 @@ class LoadBalancer(Process):
                 break
             except ConnectionRefusedError:
                 time.sleep(0.2)
+    
+    def send(self, msg: Message):
+        try:
+            self.socket.send(msg.serialize())
+        except:
+            raise Exception(f"Couldn't send to switch")
+    
+    
