@@ -65,7 +65,7 @@ class Server(Process):
                 # with self.lock:
                 self.cmdQueue.put(msg)
             except Exception as e:
-                raise e
+                print(f"error: {e}")
             
     def process_incoming_message(self, msg: Message) -> bool:
         """Processes incoming messages and distinguishes requests from responses."""
@@ -147,7 +147,7 @@ class Server(Process):
                 handled = self.process_incoming_message(req)
 
                 if not handled: # GET or PUT
-                    op_thread = threading.Thread(target=self.exec_request, args=(req))
+                    op_thread = threading.Thread(target=self.exec_request, args=(req,))
                     self.ini_operation(req,op_thread)  # make opeartion
 
     def check_key(self, key: int, context: dict[str, Any] = {}) -> bool:
@@ -205,7 +205,10 @@ class Server(Process):
                 del self.operations[key]
 
     def run(self):        
-        # 1. Start the recv thread to recv from Switch
+        # 1. Connect to seeds and get the ring and merge the ring accrodingly
+        self.send(Message(1,MessageType.GET,self.switch_name,{}))
+ 
+        # 2. Start the recv thread to recv from Switch
         # thread to handle messages from the coordinator
         recvThread = threading.Thread(target=self.receive_from_switch)
         recvThread.start()
