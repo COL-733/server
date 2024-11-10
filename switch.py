@@ -13,17 +13,17 @@ class Switch:
         self.socket.listen(5)
         self.servers: dict[str, socket.socket] = dict()
 
-    def run(self):
-        recvThd = Thread(target=self.recvThd)
+    def run(self, name):
+        recvThd = Thread(target=self.recvThd, args=(name,))
         recvThd.start()
 
-    def recvThd(self):
+    def recvThd(self, name):
         while True:
             print("run")
             try:
-                response, _ = self.socket.recvfrom(1024)
+                response, _ = self.servers[name].recvfrom(1024)
                 message: Message = Message.deserialize(response)
-                print(message)
+                print("received Message")
                 self.forward(message)
             except Exception as e:
                 print(f"Error: {e}")
@@ -31,8 +31,11 @@ class Switch:
     def connectServerLoop(self):
         while True:
             c, addr = self.socket.accept()
-            print(f"Connected to {addr[1]}")
-            self.servers[addr[1]] = c
+            port = addr[1]
+            print(f"Connected to {port}")
+            name = self.name+"_"+str(port)
+            self.run(name)
+            self.servers[name] = c
 
     def sendToServer(self, msg: Message, dest: str):
         if self.servers.get(dest) is not None:
@@ -45,7 +48,8 @@ class Switch:
         # if self.topology.get(dest) is not None:
         #     self.topology
 
-    def forward(self, msg: Message, dest: str):
+    def forward(self, msg: Message):
+        dest = msg.dest
         if dest.split('_')[0] == self.name:
             self.sendToServer(msg, dest)
         else:
@@ -53,6 +57,4 @@ class Switch:
 
 if __name__=="__main__":
     switch = Switch(sys.argv[1], {})
-    print("run")
-    switch.run()
     switch.connectServerLoop()

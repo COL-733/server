@@ -1,8 +1,8 @@
 import json
 import struct
-from enum import Enum
+from enum import IntEnum
 
-class MessageType(Enum):
+class MessageType(IntEnum):
 
     GET     = 1 # From SUB_COORDINATOR to READ_COORDINATOR or Client to SUB_COORDINATOR/WRITE_COORDINATOR
     GET_KEY = 2 # From READ_COORDINATOR to Node
@@ -59,7 +59,9 @@ class Message:
         message_json = message_bytes[4:4 + message_length].decode('utf-8')
         message_dict = json.loads(message_json)
         msg_type = MessageType(message_dict["type"])
+        id = message_dict["id"]
         source = message_dict["source"]
-        kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source"}}
+        dest = message_dict["dest"]
+        kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest"}}
 
-        return Message(msg_type, source, **kwargs)
+        return Message(id, msg_type, source, dest, **kwargs)

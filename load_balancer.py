@@ -1,9 +1,10 @@
+import sys
 import socket
 import time
 from multiprocessing import Process
-from message import Message
+from message import Message, MessageType
 
-LB_PORT = 3000
+LB_PORT = 4000
 SWITCH_PORT = 2000
 
 class LoadBalancer(Process):
@@ -19,7 +20,7 @@ class LoadBalancer(Process):
     def connectSwitch(self) -> None: # Connect to switch
         while True:
             try:
-                self.socket.bind(('', self.port))
+                self.socket.bind(('', LB_PORT))
                 self.socket.connect(('', SWITCH_PORT))
                 break
             except ConnectionRefusedError:
@@ -31,4 +32,13 @@ class LoadBalancer(Process):
         except:
             raise Exception(f"Couldn't send to switch")
     
+    def send_test(self, id, dest):
+        testMessage = Message(id, MessageType.GET, self.name, dest)
+        self.send(testMessage)
+
+if __name__=="__main__":
+    lb = LoadBalancer(sys.argv[1], '', SWITCH_PORT)
+    while True:
+        id, dest = input().split()
+        lb.send_test(id, dest)
     

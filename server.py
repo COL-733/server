@@ -57,14 +57,16 @@ class Server(Process):
             try:
                 response, _ = self.socket.recvfrom(1024)
                 msg: Message = Message.deserialize(response)
-                with self.lock:
-                    self.cmdQueue.put(msg)
+                print(f"Received Message {msg}")
+                # with self.lock:
+                print("lock")
+                self.cmdQueue.put(msg)
             except Exception as e:
                 raise e
             
     def process_incoming_message(self, msg: Message) -> bool:
         """Processes incoming messages and distinguishes requests from responses."""
-        req_type = msg.kwargs["type"]
+        req_type = msg.msg_type
         msgid = msg.id
         key = msg.kwargs["key"]
 
@@ -113,18 +115,18 @@ class Server(Process):
         op = None
         if self.check_key(key):
 
-            if req.kwargs["type"] == MessageType.GET:
+            if req.msg_type == MessageType.GET:
                 res = self.get(key)
                 op = Operation(op_thread, req, True, res, 0)
-            elif req.kwargs["type"] == MessageType.PUT:
+            elif req.msg_type == MessageType.PUT:
                 self.put(key)
                 op = Operation(op_thread, req, True, [], 1)
 
         else:
 
-            if req.kwargs["type"] == MessageType.GET:
+            if req.msg_type == MessageType.GET:
                 op = Operation(op_thread, req, False)
-            elif req.kwargs["type"] == MessageType.PUT:
+            elif req.msg_type == MessageType.PUT:
                 op = Operation(op_thread, req, False)
         
         self.operations[req.id] = op    # Add operation
@@ -133,7 +135,7 @@ class Server(Process):
     def command_handler(self) -> None: # thread
         while True:
 
-            with self.lock:
+            # with self.lock:
 
                 req = self.cmdQueue.get()
                 # handle all request not adding new ops to self.operations
@@ -173,9 +175,9 @@ class Server(Process):
         while True:
             time.sleep(60)  # Run cleanup every 60 seconds
             to_remove = [key for key, op in self.operations.items() if op.is_complete()]
-            with self.lock:
-                for key in to_remove:
-                    del self.operations[key]
+            # with self.lock:
+            for key in to_remove:
+                del self.operations[key]
 
     def run(self):
         # 1. Connect to seeds and get the ring and merge the ring accrodingly
