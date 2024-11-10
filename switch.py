@@ -1,6 +1,7 @@
 import socket
 from threading import Thread
 from message import Message
+import sys
 PORT = 2000
 
 class Switch:
@@ -29,6 +30,7 @@ class Switch:
     def connectServerLoop(self):
         while True:
             c, addr = self.socket.accept()
+            print(f"Connected to {addr[1]}")
             self.servers[addr[1]] = c
 
     def sendToServer(self, msg: Message, dest: str):
@@ -47,3 +49,6 @@ class Switch:
             self.sendToServer(msg, dest)
         else:
             self.sendToSwitch(msg, dest)
+
+if __name__=="__main__":
+    switch = Switch(sys.argv[1], {})
