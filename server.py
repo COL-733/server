@@ -11,7 +11,7 @@ SWITCH_PORT = 2000
 class Server(Process):
     def __init__(self, switch_name: str, switch_ip: str, port: int):
         self.name: str = f'{switch_name}_{port}'
-        super(Server, self).__init__(info=self.name)
+        super(Server, self).__init__()
 
         self.name: str = f'{switch_name}_{port}'
         self.port: int = port
@@ -23,13 +23,14 @@ class Server(Process):
         self.connectSwitch()
 
         self.ring: Ring
-        self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
+        # self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
         self.cmdQueue: queue[MessageType]
 
     def connectSwitch(self) -> None: # Connect to switch
         while True:
             try:
-                self.socket.connect('switch_ip',SWITCH_PORT)
+                self.socket.bind(('', self.port))
+                self.socket.connect(('', SWITCH_PORT))
                 break
             except ConnectionRefusedError:
                 time.sleep(0.2)

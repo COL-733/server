@@ -2,7 +2,6 @@ import random
 from threading import Lock
 import hashlib
 from sortedcontainers import SortedList # type: ignore
-from server import ServerInfo, Server
 from config import config
 
 MAX = (1 << 128) - 1
@@ -57,6 +56,7 @@ class Ring:
             if i > self.N:
                 break
         
+        self.lock.release()
         return prefList
 
     

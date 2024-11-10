@@ -9,10 +9,27 @@ class Switch:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('', PORT))
         self.socket.listen(5)
-        self.servers = dict()
-        self.connectLoop()
+        self.servers: dict[str, socket.socket] = dict()
+        self.connectServerLoop()
 
-    def connectLoop(self):
+    def connectServerLoop(self):
         while True:
             c, addr = self.socket.accept()
             self.servers[addr[1]] = c
+
+    def sendToServer(self, msg: Message, dest: str):
+        if self.servers.get(dest) is not None:
+            self.servers[dest].send(msg.serialize())
+        else:
+            raise Exception(f"Server {dest} not found")
+   
+    def sendToSwitch(self, msg: Message, dest: str):
+        raise NotImplementedError
+        # if self.topology.get(dest) is not None:
+        #     self.topology
+
+    def forward(self, msg: Message, dest: str):
+        if dest.split('_')[0] == self.name:
+            self.sendToServer(msg, dest)
+        else:
+            self.sendToSwitch(msg, dest)
