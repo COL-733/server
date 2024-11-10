@@ -3,6 +3,7 @@ import queue
 import time
 import threading
 import random
+import sys
 from abc import ABC, abstractmethod
 
 from enum import IntEnum
@@ -34,8 +35,8 @@ class Server(Process):
         self.connect_to_switch()
 
         self.ring: Ring
-        self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
-        self.cmdQueue: queue.Queue[Message] = []
+        # self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
+        self.cmdQueue: queue.Queue[Message] = queue.Queue()
 
         self.lock = Lock()
 
@@ -43,8 +44,8 @@ class Server(Process):
         """At booting, connect to the Switch."""
         while True:
             try:
-                # self.socket.bind((f'{self.switch_ip}',   SWITCH_PORT))
-                self.socket.connect(f'{self.switch_ip}', SWITCH_PORT)
+                self.socket.bind(("", self.port))
+                self.socket.connect(("", SWITCH_PORT))
                 break
             except ConnectionRefusedError:
                 time.sleep(0.2)
@@ -190,3 +191,7 @@ class Server(Process):
 
         CmdThread.join()
         RecvThread.join()
+
+if __name__=="__main__":
+    server = Server(sys.argv[1],"",int(sys.argv[2]),{})
+    server.run()

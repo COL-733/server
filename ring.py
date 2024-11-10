@@ -1,7 +1,7 @@
 import random
 from threading import Lock
 import hashlib
-from sortedcontainers import SortedList # type: ignore
+from sortedcontainers import SortedList
 from config import config
 
 MAX = (1 << 128) - 1
