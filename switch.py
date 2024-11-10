@@ -23,6 +23,7 @@ class Switch:
             try:
                 response, _ = self.socket.recvfrom(1024)
                 message: Message = Message.deserialize(response)
+                print(message)
                 self.forward(message)
             except Exception as e:
                 print(f"Error: {e}")

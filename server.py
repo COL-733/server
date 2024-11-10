@@ -195,3 +195,4 @@ class Server(Process):
 if __name__=="__main__":
     server = Server(sys.argv[1],"",int(sys.argv[2]),{})
     server.run()
+    server.send(Message(1,MessageType.GET,server.name,"switch",{}))
