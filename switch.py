@@ -1,4 +1,5 @@
 import socket
+from threading import Thread
 from message import Message
 PORT = 2000
 
@@ -11,6 +12,10 @@ class Switch:
         self.socket.listen(5)
         self.servers: dict[str, socket.socket] = dict()
         self.connectServerLoop()
+
+    def run(self):
+        recvThd = Thread(target=self.recvThd)
+        recvThd.start()
 
     def recvThd(self):
         while True:
