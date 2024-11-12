@@ -3,6 +3,7 @@ import struct
 from ring import VirtualNode, Ring
 from enum import IntEnum
 from config import BUFFER_SIZE
+from typing import Any
 
 class MessageType(IntEnum):
 
@@ -29,12 +30,12 @@ class MessageType(IntEnum):
     
 class Message:
 
-    def __init__(self, id: int, msg_type: MessageType, source: str, dest: str, **kwargs):
+    def __init__(self, id: int, msg_type: MessageType, source: str, dest: str, kwargs: dict[str, Any] = None):
         self.id = id
         self.msg_type = msg_type
         self.source = source
         self.dest = dest
-        self.kwargs = kwargs
+        self.kwargs = kwargs if kwargs else {}
 
     def __repr__(self):
         return f"{self.msg_type.name}, From: {self.source}, To: {self.dest}, ID: {self.id}"
