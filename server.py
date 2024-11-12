@@ -5,6 +5,7 @@ import threading
 import random
 import logging
 import argparse
+import os
 from abc import ABC, abstractmethod
 
 from enum import IntEnum
@@ -39,7 +40,8 @@ class Server(Process):
         self.ring: Ring = Ring([])
         self.ring.init(self.name, config.T, self.seeds)
         
-        # self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
+        # Unique to each server $path_to_database={datacenter_name}/{server_name}_storage.db
+        self.storage = Storage(f"{self.switch_name}/{self.name}_storage.db")
         self.cmdQueue: queue.Queue[Message] = queue.Queue()
 
         self.lock = Lock()
@@ -150,16 +152,23 @@ class Server(Process):
                     op_thread = threading.Thread(target=self.exec_request, args=(req,))
                     self.ini_operation(req,op_thread)  # make opeartion
 
-    def check_key(self, key: int, context: dict[str, Any] = {}) -> bool:
-        # What if we are in the preference list
-        # but we don't have key handle that
-        raise NotImplementedError
-    
-    def get(self, key: int, context: dict[str, Any] = {}):
-        raise NotImplementedError
+    def get(self, key: int, context: Any = None) -> Optional[Any]:
+        """Retrieve a value by key from local storage."""
+        if context:
+            return self.storage.get_version(key, context)
+        else:
+            return self.storage.get(key)
 
-    def put(self, key: int, context: dict[str, Any] = {}):
-        raise NotImplementedError
+    def put(self, key: int, value: Any) -> None:
+        """Store a key-value pair in local storage."""
+        self.storage.put(key, value, vector_clock=None)
+
+    def check_key(self, key: int) -> bool:
+        """Check if the key exists in the local storage."""
+        # What if we don't have key but key is in the range
+        # Do one thing first change wether it's in our range or not
+        # if it is find in storage if we've return true else false
+        return self.storage.exists(key)
 
     def send(self, msg: Message): # To Server or Load Blanacer through Switch
         while True:
@@ -203,6 +212,36 @@ class Server(Process):
             # with self.lock:
             for key in to_remove:
                 del self.operations[key]
+
+    def shutdown(self) -> None:
+        """Shutdown the server, delete the database, close the socket, and reset variables."""
+        print("[Server] Shutting down server...")
+
+        # Step 1: Close the socket connection
+        try:
+            self.socket.close()
+            print("[Server] Socket closed.")
+        except Exception as e:
+            print(f"[Server] Error closing socket: {e}")
+
+        # Step 2: Delete the database file
+        db_path = f"{self.name}_storage"
+        try:
+            os.remove(db_path)
+            print(f"[Server] Database '{db_path}' deleted.")
+        except FileNotFoundError:
+            print(f"[Server] Database '{db_path}' does not exist, nothing to delete.")
+        except Exception as e:
+            print(f"[Server] Error deleting database '{db_path}': {e}")
+
+        # Step 3: Reset server variables
+        self.operations.clear()
+        self.cmdQueue = queue.Queue()
+        self.ring = None
+        print("[Server] Reset server variables.")
+
+        # Final message
+        print("[Server] Shutdown complete.")
 
     def run(self):        
         # 1. Connect to seeds and get the ring and merge the ring accrodingly

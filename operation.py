@@ -8,7 +8,7 @@ class Operation:
     def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = [], acks: int = 0):
         # threading
         self.thread: threading.Thread = thread
-        self.cv: threading.Condition
+        self.cv: threading.Condition = threading.Condition()
         self.lock: threading.Lock = threading.Lock()
 
         # metadata
