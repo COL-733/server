@@ -3,9 +3,10 @@ import threading
 from message import MessageType, Message
 from typing import Any
 from config import config
+from storage import VectorClock, VersionedValue
 
 class Operation:
-    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = [], acks: int = 0):
+    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = set(), acks: int = 0):
         # threading
         self.thread: threading.Thread = thread
         self.cv: threading.Condition = threading.Condition()
@@ -20,7 +21,7 @@ class Operation:
 
         # To maintain the responses
         self.acks: int = acks # Initialize with 1 for own ack
-        self.resList: list[Any] = res # for get initialize with own response
+        self.resList: set[VersionedValue] = res # for get initialize with own response
     
     def start(self) -> None:
         """Start the Opeartion thread."""
@@ -30,11 +31,11 @@ class Operation:
         """Increase the acknowledgement count."""
         self.acks += 1
     
-    def add_response(self, res: Any) -> None:
+    def add_response(self, res: set[VersionedValue]) -> None:
         """Add get response to the response list."""
-        self.resList.append(res)
+        self.resList.union(res)
     
-    def handle_response(self, res: Any = None) -> None:
+    def handle_response(self, res: set[VersionedValue] = None) -> None:
         """Handle the response according to type."""
         with self.lock:
             if self.type == MessageType.PUT:
@@ -49,18 +50,20 @@ class Operation:
             if done:
                 self.cv.notify()
 
-    def syn_reconcile(self) -> list[Any]:
+    def syn_reconcile(self) -> None:
         """Perform syntactic reconcilation if possible."""
         if self.type == MessageType.GET:
             # Only reconcile if GET
             raise NotImplementedError
-        
-        # raise NotImplementedError
     
     def response_msg(self, server_name: str, destination: str) -> Message:
         """Make response message for the Preference List nodes."""
         response = {"res": self.resList} if self.type == MessageType.GET else {}
+
         msg_type = MessageType.GET_RES if self.type == MessageType.GET else MessageType.PUT_ACK
+
+        msg_type = MessageType.GET_KEY if self.type == MessageType.GET else MessageType.PUT_KEY
+        
         return Message(self.id, msg_type, server_name, destination, response)
 
     def reply_msg(self, server_name: str) -> Message:
