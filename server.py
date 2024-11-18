@@ -12,7 +12,7 @@ from enum import IntEnum
 from multiprocessing import Process
 from ring import Ring
 from message import MessageType, Message
-from storage import Storage
+from storage import Storage, VersionedValue, VectorClock
 from threading import Lock
 from typing import Any, Final, Optional
 from config import *
@@ -30,6 +30,7 @@ class Server(Process):
         self.switch_name: str = switch_name
         self.switch_ip: str = switch_ip
         self.seeds: list[str] = seeds
+        self.version: int = 0
 
         self.operations: dict[str, Operation] = {}
 
@@ -82,19 +83,24 @@ class Server(Process):
             if msgid in self.operations:
                 op = self.operations[msgid]
                 res = msg.kwargs["res"] if "res" in msg.kwargs else None
-                op.handle_response(res)
+                op.handle_response(res=res)
             return True
 
         else:
             kw = {}
             if req_type == MessageType.GET_KEY:
-                kw["res"] = self.get(key)
-                response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
+                res = self.get(key)
+                # Only send if we've a legit GET_RESPONSE
+                if res:
+                    kw["res"] = res
+                    response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
+                    self.send(response)
             elif req_type == MessageType.PUT_KEY:
-                self.put(key)
+                # Put the same version got from the coordinator
+                self.put(key, msg.kwargs["value"], msg.kwargs["context"])
                 response = Message(msgid, MessageType.PUT_ACK, self.name, msg.source, kw)
-            
-            self.send(response)
+                self.send(response)
+
             return True
 
     def exec_request(self, req: Message) -> None:
@@ -113,21 +119,30 @@ class Server(Process):
             del self.operations[req.id]
 
     def ini_operation(self, req: Message, op_thread: threading.Thread) -> None:
-        """Add & initialize the operation for given request."""
+        """Add & initialize the operation for given request.(GET or PUT)"""
         key = req.kwargs["key"]
+
+        # Increase the version number
+        self.version += 1
 
         # Check wether we've key or not
         op = None
-        if self.check_key(key):
+        if self.check_key(key): # we're coordinator
 
             if req.msg_type == MessageType.GET:
                 res = self.get(key)
-                op = Operation(op_thread, req, True, res, 0)
+                op = Operation(op_thread, req, True, res=res)
             elif req.msg_type == MessageType.PUT:
-                self.put(key)
-                op = Operation(op_thread, req, True, [], 1)
+                if "context" in req.kwargs:
+                    # update the our version in context(context is instanvce of VectorClock)
+                    req.kwargs["context"].add(self.name, self.version)
 
-        else:
+                    self.put(key, req.kwargs["key"], req.kwargs["context"])
+                    op = Operation(op_thread, req, True, acks=1)
+                else:
+                    print(f'Operation for {key} was not created: "context" not found in message {req.id}.')
+
+        else: # we're sub coordinator
 
             if req.msg_type == MessageType.GET:
                 op = Operation(op_thread, req, False)
@@ -148,26 +163,24 @@ class Server(Process):
                 # handle all request not adding new ops to self.operations
                 handled = self.process_incoming_message(req)
 
-                if not handled: # GET or PUT
-                    op_thread = threading.Thread(target=self.exec_request, args=(req,))
-                    self.ini_operation(req,op_thread)  # make opeartion
+            if not handled: # GET or PUT
+                op_thread = threading.Thread(target=self.exec_request, args=(req,))
+                self.ini_operation(req,op_thread)  # make opeartion
 
-    def get(self, key: int, context: Any = None) -> Optional[Any]:
+    def get(self, key: int) -> Optional[set[VersionedValue]]:
         """Retrieve a value by key from local storage."""
-        if context:
-            return self.storage.get_version(key, context)
-        else:
-            return self.storage.get(key)
+        return self.storage.get_leaf_nodes(key)
 
-    def put(self, key: int, value: Any) -> None:
+    def put(self, key: int, value: str,  context: VectorClock = None) -> None:
         """Store a key-value pair in local storage."""
-        self.storage.put(key, value, vector_clock=None)
+        self.storage.add_version(key, value, context)
 
     def check_key(self, key: int) -> bool:
         """Check if the key exists in the local storage."""
         # What if we don't have key but key is in the range
         # Do one thing first change wether it's in our range or not
         # if it is find in storage if we've return true else false
+        # Remove own self from the preflist
         return self.storage.exists(key)
 
     def send(self, msg: Message): # To Server or Load Blanacer through Switch
