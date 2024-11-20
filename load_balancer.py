@@ -32,7 +32,7 @@ class LoadBalancer(Process):
     def handle_client(self, client_socket: socket.socket):
         try:
             while True:
-                data = recvall(client_socket, 1024)
+                data = recvall(client_socket, BUFFER_SIZE)
                 if not data:
                     break
                 message = Message.deserialize(data)

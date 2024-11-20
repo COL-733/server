@@ -3,30 +3,34 @@ from threading import Lock
 import hashlib
 from sortedcontainers import SortedList
 from config import config
-
-MAX = (1 << 128) - 1
+import json
 
 class VirtualNode:
     pass
 
 class VirtualNode:
-    def __init__(self, server: str):
+    def __init__(self, server: str, pos=random.randint(0, config.Q)):
         self.server: str = server
-        self.pos: int = random.randint(0, MAX)
+        self.pos: int = pos
 
     def __lt__(self, other: VirtualNode) -> bool:
         return self.pos < other.pos
 
 class Ring:
-    def __init__(self, numTokens, server):
-        self.state: SortedList[VirtualNode] = SortedList()
-        self.server = server
-        self.N = config.N
+    def __init__(self, state):
+        self.state: SortedList[VirtualNode] = SortedList(state)
         self.lock = Lock()
 
-        for _ in range(numTokens):
-            self.state.add(VirtualNode(server))
+    def serialize(self):
+        return list((vNode.server, vNode.pos) for vNode in self.state)
     
+    def init(self, serverName, numTokens, seeds):
+        self.serverName = serverName
+        self.serverSet = seeds
+        for _ in range(numTokens):
+            self.state.add(VirtualNode(serverName))
+
+
     def _hash(self, key: str):
         md5 = hashlib.md5(key.encode())
         return int(md5.hexdigest(), 16)
@@ -53,7 +57,7 @@ class Ring:
                 prefList.append(idx)
             
             # if i loops over, break
-            if i > self.N:
+            if i > config.N:
                 break
         
         self.lock.release()

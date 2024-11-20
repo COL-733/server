@@ -3,7 +3,8 @@ import queue
 import time
 import threading
 import random
-import sys
+import logging
+import argparse
 from abc import ABC, abstractmethod
 
 from enum import IntEnum
@@ -13,8 +14,9 @@ from message import MessageType, Message
 from storage import Storage
 from threading import Lock
 from typing import Any, Final, Optional
-from config import config
+from config import *
 from operation import Operation
+logging.basicConfig(level=logging.INFO)
 
 SWITCH_PORT = 2000
 
@@ -34,7 +36,9 @@ class Server(Process):
         self.socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect_to_switch()
 
-        self.ring: Ring
+        self.ring: Ring = Ring([])
+        self.ring.init(self.name, config.T, self.seeds)
+        
         # self.storage: Storage = Storage('localhost','root','Jdsp9595@',f'{self.name}_storage')
         self.cmdQueue: queue.Queue[Message] = queue.Queue()
 
@@ -44,6 +48,7 @@ class Server(Process):
         """At booting, connect to the Switch."""
         while True:
             try:
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.socket.bind(("", self.port))
                 self.socket.connect(("", SWITCH_PORT))
                 break
@@ -55,7 +60,7 @@ class Server(Process):
         while True:
             print("Thread")
             try:
-                response, _ = self.socket.recvfrom(1024)
+                response, _ = self.socket.recvfrom(BUFFER_SIZE)
                 msg: Message = Message.deserialize(response)
                 print(f"Received Message {msg}")
                 # with self.lock:
@@ -165,8 +170,8 @@ class Server(Process):
                 # if not sent, wait and again send
                 time.sleep(0.05)
 
-    def gossip_protocol(): # Thread
-        raise NotImplementedError
+    def gossip(self): # Thread
+        logging.info(f"Starting Gossip...")
 
     def handle_hinted_handoffs(): # Thread
         raise NotImplementedError
@@ -179,23 +184,33 @@ class Server(Process):
             for key in to_remove:
                 del self.operations[key]
 
-    def run(self):
-        # 1. Connect to seeds and get the ring and merge the ring accrodingly
-        # ???????????
-
-        # 2. Start the recv thread to recv from Switch
+    def run(self):        
+        # 1. Start the recv thread to recv from Switch
         # thread to handle messages from the coordinator
-        RecvThread = threading.Thread(target=self.receive_from_switch)
-        RecvThread.start()
+        recvThread = threading.Thread(target=self.receive_from_switch)
+        recvThread.start()
 
-        # 3. thread to process the command queue
-        CmdThread = threading.Thread(target=self.command_handler)
-        CmdThread.start()
+        # 2. thread to process the command queue
+        cmdThread = threading.Thread(target=self.command_handler)
+        cmdThread.start()
+        
+        gossipThread = threading.Thread(target=self.gossip)
+        gossipThread.start()
 
-        CmdThread.join()
-        RecvThread.join()
+        cmdThread.join()
+        recvThread.join()
+        gossipThread.join()
 
-if __name__=="__main__":
-    server = Server(sys.argv[1],"",int(sys.argv[2]),{})
-    print("sent")
+if __name__=="__main__":    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', help = "Switch Name", required=True)
+    parser.add_argument('-p', help = "Port Number", required=True, type=int)
+    parser.add_argument('-sd', nargs='+', help='List of seed ports', required=True)
+    args = parser.parse_args()
+
+    switch_name = args.s
+
+    seeds = [f"{switch_name}_{port}" for port in args.sd]
+
+    server = Server(switch_name, '', args.p, [])
     server.run()

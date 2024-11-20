@@ -5,6 +5,7 @@ from message import Message
 import logging
 from typing import Final
 from config import *
+logging.basicConfig(level=logging.INFO)
 
 class Switch:
     def __init__(self, name, topology):
@@ -23,7 +24,7 @@ class Switch:
     def recvThd(self, name):
         while True:
             try:
-                response, _ = self.servers[name].recvfrom(1024)
+                response, _ = self.servers[name].recvfrom(BUFFER_SIZE)
                 message: Message = Message.deserialize(response)
                 logging.info(f"Received Message {message}")
                 self.forward(message)
@@ -57,7 +58,6 @@ class Switch:
         else:
             self.sendToSwitch(msg, dest)
 
-if __name__=="__main__":
-    logging.basicConfig(level=logging.INFO)
+if __name__=="__main__":    
     switch = Switch(sys.argv[1], {})
     switch.connectServerLoop()

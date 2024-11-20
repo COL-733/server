@@ -1,6 +1,8 @@
 import json
 import struct
+from ring import VirtualNode, Ring
 from enum import IntEnum
+from config import BUFFER_SIZE
 
 class MessageType(IntEnum):
 
@@ -26,7 +28,6 @@ class MessageType(IntEnum):
     
     
 class Message:
-    BUFFER_SIZE = 1024
 
     def __init__(self, id: int, msg_type: MessageType, source: str, dest: str, **kwargs):
         self.id = id
@@ -43,6 +44,10 @@ class Message:
             "source": self.source,
             "dest": self.dest
         }
+
+        if self.kwargs.get('ring') is not None:
+            self.kwargs['ring'] = self.kwargs['ring'].serialize()
+
         for k,v in self.kwargs.items():
             message_dict[k] = v
 
@@ -50,7 +55,7 @@ class Message:
         message_bytes = message_json.encode('utf-8')
         message_length = len(message_bytes)
         full_message = struct.pack('!I', message_length) + message_bytes
-        padded_message = full_message.ljust(self.BUFFER_SIZE, b'\x00')
+        padded_message = full_message.ljust(BUFFER_SIZE, b'\x00')
         return padded_message
 
     @staticmethod
@@ -62,6 +67,10 @@ class Message:
         id = message_dict["id"]
         source = message_dict["source"]
         dest = message_dict["dest"]
-        kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest"}}
+        kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest", "ring"}}
+
+        if message_dict.get('ring') is not None:
+            state = [VirtualNode(server, pos) for server, pos in message_dict['ring']]
+            kwargs['ring'] = Ring(state).state
 
         return Message(id, msg_type, source, dest, **kwargs)
