@@ -60,17 +60,20 @@ class Message:
 
     @staticmethod
     def deserialize(message_bytes: bytes) -> 'Message':
-        message_length = struct.unpack('!I', message_bytes[:4])[0]
-        message_json = message_bytes[4:4 + message_length].decode('utf-8')
-        message_dict = json.loads(message_json)
-        msg_type = MessageType(message_dict["type"])
-        id = message_dict["id"]
-        source = message_dict["source"]
-        dest = message_dict["dest"]
-        kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest", "ring"}}
+        try:
+            message_length = struct.unpack('!I', message_bytes[:4])[0]
+            message_json = message_bytes[4:4 + message_length].decode('utf-8')
+            message_dict = json.loads(message_json)
+            msg_type = MessageType(message_dict["type"])
+            id = message_dict["id"]
+            source = message_dict["source"]
+            dest = message_dict["dest"]
+            kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest", "ring"}}
 
-        if message_dict.get('ring') is not None:
-            state = [VirtualNode(server, pos) for server, pos in message_dict['ring']]
-            kwargs['ring'] = Ring(state).state
+            if message_dict.get('ring') is not None:
+                state = [VirtualNode(server, pos) for server, pos in message_dict['ring']]
+                kwargs['ring'] = Ring(state)
+        except Exception as e:
+            raise Exception(f"Deserialize Error: {e}, Message: {message_bytes}")
 
         return Message(id, msg_type, source, dest, **kwargs)

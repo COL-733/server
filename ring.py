@@ -1,12 +1,12 @@
 import random
 from threading import Lock
 import hashlib
-from sortedcontainers import SortedList
+from sortedcontainers import SortedSet
 from config import config
 import json
 
-class VirtualNode:
-    pass
+class VirtualNode: pass
+class Ring: pass
 
 class VirtualNode:
     def __init__(self, server: str, pos=random.randint(0, config.Q)):
@@ -15,18 +15,30 @@ class VirtualNode:
 
     def __lt__(self, other: VirtualNode) -> bool:
         return self.pos < other.pos
+    
+    def __hash__(self):
+        return self.pos
 
 class Ring:
     def __init__(self, state):
-        self.state: SortedList[VirtualNode] = SortedList(state)
+        self.state: SortedSet[VirtualNode] = SortedSet(state)
         self.lock = Lock()
+        self.serverName: str
+        self.serverSet: set[str] = set()
+
+    def merge(self, ring: Ring):
+        for node in ring.state:
+            self.state.add(node)
+            if node.server != self.serverName:
+                self.serverSet.add(node.server)
 
     def serialize(self):
-        return list((vNode.server, vNode.pos) for vNode in self.state)
+        return list([vNode.server, vNode.pos] for vNode in self.state)
     
     def init(self, serverName, numTokens, seeds):
         self.serverName = serverName
-        self.serverSet = seeds
+        self.serverSet = set(seeds)
+        self.serverSet.discard(serverName)
         for _ in range(numTokens):
             self.state.add(VirtualNode(serverName))
 

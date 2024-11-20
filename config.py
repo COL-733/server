@@ -7,17 +7,21 @@ LB_PORT: Final[int] = 4000
 BUFFER_SIZE: Final[int] = 1 << 16
 
 class Config:
-    def __init__(self, N, R, W, Q, T):
+    def __init__(self, N, R, W, Q, T, G, I):
         self.N = N
         self.R = R
         self.W = W
-        self.Q = Q
-        self.T = T
+        self.Q = Q      # number of keys in the ring
+        self.T = T      # initial number of tokens of a server
+        self.G = G      # Number of servers to gossip with
+        self.I = I      # Gossip interval
 
 config = Config(
     N = 3,
     R = 3,
     W = 3,
-    Q = (1 << 128) - 1,     # number of keys in the ring
-    T = 5,                  # initial number of tokens of a server
+    Q = 1024,
+    T = 5,             
+    G = 1,             
+    I = 1,             
 )

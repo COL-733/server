@@ -16,7 +16,7 @@ from threading import Lock
 from typing import Any, Final, Optional
 from config import *
 from operation import Operation
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 SWITCH_PORT = 2000
 
@@ -58,13 +58,11 @@ class Server(Process):
     def receive_from_switch(self) -> None:
         """Thread to receive messages from Switch."""
         while True:
-            print("Thread")
             try:
                 response, _ = self.socket.recvfrom(BUFFER_SIZE)
                 msg: Message = Message.deserialize(response)
-                print(f"Received Message {msg}")
+                logging.info(f"Received Message {msg}")
                 # with self.lock:
-                print("lock")
                 self.cmdQueue.put(msg)
             except Exception as e:
                 raise e
@@ -140,9 +138,11 @@ class Server(Process):
     def command_handler(self) -> None: # thread
         while True:
 
-            # with self.lock:
+            req = self.cmdQueue.get()
 
-                req = self.cmdQueue.get()
+            if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
+                self.handle_gossips(req)
+            else:
                 # handle all request not adding new ops to self.operations
                 handled = self.process_incoming_message(req)
 
@@ -172,6 +172,22 @@ class Server(Process):
 
     def gossip(self): # Thread
         logging.info(f"Starting Gossip...")
+        while True:
+            logging.debug(f"Known Servers: {self.ring.serverSet}")
+            logging.debug(f"Ring State: {list(self.ring.state)}")
+            time.sleep(config.I)
+            gossipList = random.sample(list(self.ring.serverSet), config.G)
+            for server in gossipList:
+                message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, ring=self.ring)
+                self.send(message)
+
+    def handle_gossips(self, msg: Message):
+        # merge incoming ring
+        self.ring.merge(msg.kwargs['ring'])
+        # send own ring
+        if msg.msg_type == MessageType.GOSSIP_REQ:
+            message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, ring=self.ring)
+            self.send(message)
 
     def handle_hinted_handoffs(): # Thread
         raise NotImplementedError
@@ -210,7 +226,7 @@ if __name__=="__main__":
 
     switch_name = args.s
 
-    seeds = [f"{switch_name}_{port}" for port in args.sd]
+    seeds = [f"{switch_name}_{port}" for port in args.sd if port != args.p]
 
-    server = Server(switch_name, '', args.p, [])
+    server = Server(switch_name, '', args.p, seeds)
     server.run()
