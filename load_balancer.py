@@ -6,11 +6,8 @@ import threading
 import logging
 import queue
 from dataclasses import dataclass
-from typing import Final
 from message import Message, MessageType
-
-LB_PORT: Final[int] = 4000
-SWITCH_PORT: Final[int] = 2000
+from config import *
 
 def recvall(sock: socket.socket, length: int) -> bytes:
     data = b''
@@ -55,6 +52,7 @@ class LoadBalancer(Process):
                 logging.exception(f"Error in handle_query: {e}")
                 
     def run(self):
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(('', self.port))
         self.server_socket.listen(5)
         logging.info(f"LoadBalancer listening on port {self.port}")
@@ -81,6 +79,8 @@ class LoadBalancer(Process):
     def connect_switch(self) -> None:
         while True:
             try:
+                self.switch_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.switch_socket.bind(('', LB_TO_SWITCH_PORT))
                 self.switch_socket.connect((self.switch_ip, SWITCH_PORT))
                 logging.info(f"Connected to switch at {self.switch_ip}:{SWITCH_PORT}")
                 break
@@ -100,7 +100,8 @@ class LoadBalancer(Process):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    lb = LoadBalancer(sys.argv[1], '', SWITCH_PORT)
+    lb = LoadBalancer(sys.argv[1], '', LB_PORT)
+    lb.run()
     while True:
         id, dest = input().split()
         lb.send_test(id, dest)

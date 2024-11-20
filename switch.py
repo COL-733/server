@@ -1,15 +1,18 @@
+import sys
 import socket
 from threading import Thread
 from message import Message
-import sys
-PORT = 2000
+import logging
+from typing import Final
+from config import *
 
 class Switch:
     def __init__(self, name, topology):
         self.name = name
         self.topology = topology
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind(('', PORT))
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(('', SWITCH_PORT))
         self.socket.listen(5)
         self.servers: dict[str, socket.socket] = dict()
 
@@ -19,23 +22,22 @@ class Switch:
 
     def recvThd(self, name):
         while True:
-            print("run")
             try:
                 response, _ = self.servers[name].recvfrom(1024)
                 message: Message = Message.deserialize(response)
-                print("received Message")
+                logging.info(f"Received Message {message}")
                 self.forward(message)
             except Exception as e:
-                print(f"Error: {e}")
+                logging.error(f"Receive Thread: Invalid Message {e}")
 
     def connectServerLoop(self):
         while True:
             c, addr = self.socket.accept()
             port = addr[1]
-            print(f"Connected to {port}")
+            logging.info(f"Connected to server at port {port}")
             name = self.name+"_"+str(port)
-            self.run(name)
             self.servers[name] = c
+            self.run(name)
 
     def sendToServer(self, msg: Message, dest: str):
         if self.servers.get(dest) is not None:
@@ -56,5 +58,6 @@ class Switch:
             self.sendToSwitch(msg, dest)
 
 if __name__=="__main__":
+    logging.basicConfig(level=logging.INFO)
     switch = Switch(sys.argv[1], {})
     switch.connectServerLoop()
