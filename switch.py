@@ -6,7 +6,7 @@ import logging
 from typing import Final
 from config import *
 import argparse
-logging.basicConfig(level=logging.INFO)
+import log
 
 class Switch:
     def __init__(self, name, topology):
@@ -42,7 +42,7 @@ class Switch:
                     self.cv.notify()
 
             except Exception as e:
-                logging.error(f"Receive Thread: {e}")
+                logging.error(e)
     
     def sendThd(self):
         while True:
@@ -56,6 +56,7 @@ class Switch:
                     logging.error(e)
 
     def connectServerLoop(self):
+        logging.info(f"Listening at port {SWITCH_PORT}")
         while True:
             c, addr = self.socket.accept()
             port = addr[1]
@@ -85,6 +86,7 @@ class Switch:
 
 
 if __name__=="__main__":   
+    logging = log.getLogger(logging.DEBUG)
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', help = "Switch Name", required=True)
     args = parser.parse_args() 

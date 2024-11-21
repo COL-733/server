@@ -4,7 +4,7 @@ SWITCH_PORT: Final[int] = 2000
 LB_TO_SWITCH_PORT: Final[int] = 3000
 LB_PORT: Final[int] = 4000
 
-BUFFER_SIZE: Final[int] = 1 << 16
+BUFFER_SIZE: Final[int] = 1024
 
 class Config:
     def __init__(self, N, R, W, Q, T, G, I):
@@ -23,5 +23,5 @@ config = Config(
     Q = 1024,
     T = 5,             
     G = 1,             
-    I = 1,             
+    I = 3,             
 )

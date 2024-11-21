@@ -16,7 +16,7 @@ from threading import Lock
 from typing import Any, Final, Optional
 from config import *
 from operation import Operation
-logging.basicConfig(level=logging.DEBUG)
+import log
 
 SWITCH_PORT = 2000
 
@@ -61,7 +61,7 @@ class Server(Process):
             try:
                 response, _ = self.socket.recvfrom(BUFFER_SIZE)
                 msg: Message = Message.deserialize(response)
-                logging.info(f"Received Message {msg}")
+                logging.info(f"Received Message: {msg}")
                 # with self.lock:
                 self.cmdQueue.put(msg)
             except Exception as e:
@@ -173,17 +173,21 @@ class Server(Process):
     def gossip(self): # Thread
         logging.info(f"Starting Gossip...")
         while True:
-            logging.debug(f"Known Servers: {self.ring.serverSet}")
-            logging.debug(f"Ring State: {list(self.ring.state)}")
+            logging.debug(f"Known Servers: {self.ring.serverSet}, Ring State: {str(list(self.ring.state))}")
             time.sleep(config.I)
-            gossipList = random.sample(list(self.ring.serverSet), config.G)
+            if len(self.ring.serverSet) == 0:
+                logging.warning("No Server To Gossip")
+                continue
+            gossipList = random.sample(list(self.ring.serverSet), min(len(self.ring.serverSet), config.G))
             for server in gossipList:
                 message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, ring=self.ring)
                 self.send(message)
 
     def handle_gossips(self, msg: Message):
         # merge incoming ring
-        self.ring.merge(msg.kwargs['ring'])
+        newServers = self.ring.merge(msg.kwargs['ring'])
+        for serv in newServers:
+            logging.critical(f"Identified New Server {serv}")
         # send own ring
         if msg.msg_type == MessageType.GOSSIP_REQ:
             message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, ring=self.ring)
@@ -218,6 +222,7 @@ class Server(Process):
         gossipThread.join()
 
 if __name__=="__main__":    
+    logging = log.getLogger(logging.DEBUG)
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', help = "Switch Name", required=True)
     parser.add_argument('-p', help = "Port Number", required=True, type=int)

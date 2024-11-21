@@ -36,6 +36,9 @@ class Message:
         self.dest = dest
         self.kwargs = kwargs
 
+    def __repr__(self):
+        return f"{self.msg_type.name}, From: {self.source}, To: {self.dest}, ID: {self.id}"
+
     def serialize(self) -> bytes:
         # Convert message to a dictionary
         message_dict = {

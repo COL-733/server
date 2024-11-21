@@ -14,10 +14,21 @@ class VirtualNode:
         self.pos: int = pos
 
     def __lt__(self, other: VirtualNode) -> bool:
-        return self.pos < other.pos
+        if self.pos < other.pos:
+            return True
+        elif self.pos == other.pos:
+            return self.server < other.server
+        else:
+            return False
     
+    def __eq__(self, other: VirtualNode):
+        return self.pos == other.pos and self.server == other.server
+
     def __hash__(self):
         return self.pos
+
+    def __repr__(self):
+        return str((self.server, self.pos))
 
 class Ring:
     def __init__(self, state):
@@ -26,11 +37,19 @@ class Ring:
         self.serverName: str
         self.serverSet: set[str] = set()
 
+    def __repr__(self):
+        return str([str(node) for node in self.state])
+        
+
     def merge(self, ring: Ring):
+        newServers = []
         for node in ring.state:
+            node: VirtualNode
             self.state.add(node)
             if node.server != self.serverName:
+                if node.server not in self.serverSet: newServers.append(node.server)
                 self.serverSet.add(node.server)
+        return newServers
 
     def serialize(self):
         return list([vNode.server, vNode.pos] for vNode in self.state)

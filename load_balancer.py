@@ -8,6 +8,7 @@ import queue
 from dataclasses import dataclass
 from message import Message, MessageType
 from config import *
+import log
 
 def recvall(sock: socket.socket, length: int) -> bytes:
     data = b''
@@ -99,7 +100,7 @@ class LoadBalancer(Process):
         self.send_to_switch(test_message)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging = log.getLogger(logging.DEBUG)
     lb = LoadBalancer(sys.argv[1], '', LB_PORT)
     lb.run()
     while True:
