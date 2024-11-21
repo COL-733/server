@@ -36,7 +36,7 @@ class Switch:
             try:
                 response, _ = self.servers[name].recvfrom(BUFFER_SIZE)
                 message: Message = Message.deserialize(response)
-                logging.info(f"Received Message from {message.source}")
+                logging.info(f"Received Message: {message}")
                 with self.cv:
                     self.request_queue.put(message)
                     self.cv.notify()

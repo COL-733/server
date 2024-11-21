@@ -173,7 +173,7 @@ class Server(Process):
     def gossip(self): # Thread
         logging.info(f"Starting Gossip...")
         while True:
-            logging.debug(f"Known Servers: {self.ring.serverSet}, Ring State: {str(list(self.ring.state))}")
+            logging.debug(f"Known Servers: {list(self.ring.serverSet)}, Ring State: {str(list(self.ring.state))}")
             time.sleep(config.I)
             if len(self.ring.serverSet) == 0:
                 logging.warning("No Server To Gossip")

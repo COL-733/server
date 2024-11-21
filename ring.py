@@ -64,7 +64,7 @@ class Ring:
 
     def _hash(self, key: str):
         md5 = hashlib.md5(key.encode())
-        return int(md5.hexdigest(), 16)
+        return int(md5.hexdigest(), 16) % config.Q
 
     def getPrefList(self, key: str) -> list[str]:
         self.lock.acquire()
