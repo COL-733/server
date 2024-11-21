@@ -224,14 +224,14 @@ class Server(Process):
 if __name__=="__main__":    
     logging = log.getLogger(logging.DEBUG)
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', help = "Switch Name", required=True)
-    parser.add_argument('-p', help = "Port Number", required=True, type=int)
-    parser.add_argument('-sd', nargs='+', help='List of seed ports', required=True)
+    parser.add_argument('-sw', help = "Switch Name", required=True)
+    parser.add_argument('-port', help = "Port Number", required=True, type=int)
+    parser.add_argument('-seeds', nargs='+', help='List of seed ports', required=True)
     args = parser.parse_args()
 
-    switch_name = args.s
+    switch_name = args.sw
 
-    seeds = [f"{switch_name}_{port}" for port in args.sd if port != args.p]
+    seeds = [f"{switch_name}_{port}" for port in args.seeds if port != args.port]
 
-    server = Server(switch_name, '', args.p, seeds)
+    server = Server(switch_name, '', args.port, seeds)
     server.run()

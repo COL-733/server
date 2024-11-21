@@ -88,7 +88,7 @@ class Switch:
 if __name__=="__main__":   
     logging = log.getLogger(logging.DEBUG)
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', help = "Switch Name", required=True)
+    parser.add_argument('-sw', help = "Switch Name", required=True)
     args = parser.parse_args() 
 
-    switch = Switch(args.s, {})
+    switch = Switch(args.sw, {})
