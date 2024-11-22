@@ -26,6 +26,7 @@ class MessageType(IntEnum):
     ADD_SERVER_RES = 21
 
     ERROR = 22
+    SHUTDOWN = 23
     
     
 class Message:

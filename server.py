@@ -1,7 +1,7 @@
 import socket
 import queue
 import time
-import threading
+from multiprocessing import Process
 import random
 import logging
 import argparse
@@ -18,6 +18,7 @@ from typing import Any, Final, Optional
 from config import *
 from operation import Operation
 import log
+from gui import *
 
 SWITCH_PORT = 2000
 
@@ -46,6 +47,11 @@ class Server(Process):
         self.cmdQueue: queue.Queue[Message] = queue.Queue()
 
         self.lock = Lock()
+
+        self.recvThread = Process(target=self.receive_from_switch)
+        self.cmdThread = Process(target=self.command_handler)
+        self.gossipThread = Process(target=self.gossip)
+        self.gui = Process(target=self.runGUI)
 
     def connect_to_switch(self) -> None: # Connect to switch
         """At booting, connect to the Switch."""
@@ -118,7 +124,7 @@ class Server(Process):
             self.send(op.reply_msg(self.name))
             del self.operations[req.id]
 
-    def ini_operation(self, req: Message, op_thread: threading.Thread) -> None:
+    def ini_operation(self, req: Message, op_thread: Process) -> None:
         """Add & initialize the operation for given request.(GET or PUT)"""
         key = req.kwargs["key"]
 
@@ -154,7 +160,6 @@ class Server(Process):
 
     def command_handler(self) -> None: # thread
         while True:
-
             req = self.cmdQueue.get()
 
             if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
@@ -164,7 +169,7 @@ class Server(Process):
             handled = self.process_incoming_message(req)
 
             if not handled: # GET or PUT
-                op_thread = threading.Thread(target=self.exec_request, args=(req,))
+                op_thread = Process(target=self.exec_request, args=(req,))
                 self.ini_operation(req,op_thread)  # make opeartion
 
     def get(self, key: int) -> Optional[set[VersionedValue]]:
@@ -229,7 +234,14 @@ class Server(Process):
     def shutdown(self) -> None:
         """Shutdown the server, delete the database, close the socket, and reset variables."""
         print("[Server] Shutting down server...")
+        
+        shutdownMessage = Message(-1, MessageType.SHUTDOWN, self.name, self.name)
+        self.send(shutdownMessage)
 
+        self.recvThread.terminate()
+        self.cmdThread.terminate()
+        self.gossipThread.terminate()    
+        
         # Step 1: Close the socket connection
         try:
             self.socket.close()
@@ -238,7 +250,7 @@ class Server(Process):
             print(f"[Server] Error closing socket: {e}")
 
         # Step 2: Delete the database file
-        db_path = f"{self.name}_storage"
+        db_path = f"{self.switch_name}/{self.name}_storage.db"
         try:
             os.remove(db_path)
             print(f"[Server] Database '{db_path}' deleted.")
@@ -250,7 +262,9 @@ class Server(Process):
         # Step 3: Reset server variables
         self.operations.clear()
         self.cmdQueue = queue.Queue()
-        self.ring = None
+        self.gui.exit()
+
+
         print("[Server] Reset server variables.")
 
         # Final message
@@ -259,19 +273,24 @@ class Server(Process):
     def run(self):        
         # 2. Start the recv thread to recv from Switch
         # thread to handle messages from the coordinator
-        recvThread = threading.Thread(target=self.receive_from_switch)
-        recvThread.start()
 
-        # 2. thread to process the command queue
-        cmdThread = threading.Thread(target=self.command_handler)
-        cmdThread.start()
+        self.recvThread.start()
+
+        self.cmdThread.start()
         
-        gossipThread = threading.Thread(target=self.gossip)
-        gossipThread.start()
+        self.gossipThread.start()
 
-        cmdThread.join()
-        recvThread.join()
-        gossipThread.join()
+        self.gui.start()
+        
+        self.gui.join()
+        self.gossipThread.join()
+        self.recvThread.join()
+        self.cmdThread.join()
+
+    def runGUI(self):
+        self.gui = ServerGUI(self.name, self.shutdown)
+        self.gui.mainloop()
+
 
 if __name__=="__main__":    
     logging = log.getLogger(logging.DEBUG)

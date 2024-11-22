@@ -1,7 +1,7 @@
 from queue import Queue
 import socket
 from threading import Thread, Condition
-from message import Message
+from message import Message, MessageType
 import logging
 from typing import Final
 from config import *
@@ -36,6 +36,9 @@ class Switch:
             try:
                 response, _ = self.servers[name].recvfrom(BUFFER_SIZE)
                 message: Message = Message.deserialize(response)
+                if message.msg_type == MessageType.SHUTDOWN:
+                    logging.critical(f"Disconnecting server {message.source}")
+                    break
                 logging.info(f"Received Message: {message}")
                 with self.cv:
                     self.request_queue.put(message)
