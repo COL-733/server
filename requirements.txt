@@ -1,1 +1,2 @@
 sortedcontainers==2.4.0
+bsddb3==6.2.9

@@ -159,9 +159,9 @@ class Server(Process):
 
             if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
                 self.handle_gossips(req)
-            else:
-                # handle all request not adding new ops to self.operations
-                handled = self.process_incoming_message(req)
+                continue
+
+            handled = self.process_incoming_message(req)
 
             if not handled: # GET or PUT
                 op_thread = threading.Thread(target=self.exec_request, args=(req,))
@@ -202,7 +202,7 @@ class Server(Process):
                 continue
             gossipList = random.sample(list(self.ring.serverSet), min(len(self.ring.serverSet), config.G))
             for server in gossipList:
-                message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, ring=self.ring)
+                message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, {'ring': self.ring})
                 self.send(message)
 
     def handle_gossips(self, msg: Message):
@@ -212,7 +212,7 @@ class Server(Process):
             logging.critical(f"Identified New Server {serv}")
         # send own ring
         if msg.msg_type == MessageType.GOSSIP_REQ:
-            message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, ring=self.ring)
+            message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, {'ring': self.ring})
             self.send(message)
 
     def handle_hinted_handoffs(): # Thread
@@ -257,9 +257,6 @@ class Server(Process):
         print("[Server] Shutdown complete.")
 
     def run(self):        
-        # 1. Connect to seeds and get the ring and merge the ring accrodingly
-        self.send(Message(1,MessageType.GET,self.switch_name,{}))
- 
         # 2. Start the recv thread to recv from Switch
         # thread to handle messages from the coordinator
         recvThread = threading.Thread(target=self.receive_from_switch)

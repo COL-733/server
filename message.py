@@ -40,9 +40,6 @@ class Message:
     def __repr__(self):
         return f"{self.msg_type.name}, From: {self.source}, To: {self.dest}, ID: {self.id}"
 
-    def __repr__(self):
-        return f"{self.msg_type.name}, From: {self.source}, To: {self.dest}, ID: {self.id}"
-
     def serialize(self) -> bytes:
         # Convert message to a dictionary
         message_dict = {
@@ -83,4 +80,4 @@ class Message:
         except Exception as e:
             raise Exception(f"Deserialize Error: {e}, Message: {message_bytes}")
 
-        return Message(id, msg_type, source, dest, **kwargs)
+        return Message(id, msg_type, source, dest, kwargs)
