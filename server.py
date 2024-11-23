@@ -30,16 +30,15 @@ class Server():
         self.version: int = 0
 
         self.operations: dict[str, Operation] = {}
+
+        self.ring: Ring = Ring([])
+        self.ring.init(self.name, config.T, self.seeds)
         
-        self.stateVersion: int = 0
         self.loadState()
 
         # Connect to Switch
         self.socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect_to_switch()
-
-        self.ring: Ring = Ring([])
-        self.ring.init(self.name, config.T, self.seeds)
         
         # Unique to each server $path_to_database={datacenter_name}/{server_name}_storage.db
         self.storage = Storage(f"{self.switch_name}/{self.name}_storage.db")
@@ -234,10 +233,13 @@ class Server():
 
     def handle_gossips(self, msg: Message):
         # merge incoming ring
-        newServers = self.ring.merge(msg.kwargs['ring'])
-        self.gui.updateRing(self.ring)
-        for serv in newServers:
-            logging.critical(f"Identified New Server {serv}")
+        addedNodes, deletedNodes = self.ring.merge(msg.kwargs['ring'])
+        if addedNodes or deletedNodes:
+            self.gui.updateRing(self.ring)
+        for node in addedNodes:
+            logging.critical(f"Added new node of server {node.server} at position {node.pos}")
+        for node in deletedNodes:
+            logging.critical(f"Deleted a node of server {node.server} at position {node.pos}")
         # send own ring
         if msg.msg_type == MessageType.GOSSIP_REQ:
             message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, {'ring': self.ring})
@@ -311,7 +313,7 @@ class Server():
         self.guiThread.join()
 
     def runGUI(self):
-        self.gui = ServerGUI(self.name, self.shutdown, self.exit)
+        self.gui = ServerGUI(self.name, self.shutdown, self.exit, self.deleteToken)
         self.gui.updateRing(self.ring)
         self.gui.mainloop()
 
@@ -320,15 +322,23 @@ class Server():
         if os.path.exists(filePath):
             with open(filePath, 'r') as stateFile:
                 state = json.load(stateFile)
-                self.stateVersion = state['stateVersion']
+                self.ring.load(state['ring'])
         else:
             self.saveState()
     
     def saveState(self):
         filePath = f"{self.switch_name}/{self.name}_state.json"
         with open(filePath, 'w') as stateFile:
-            json.dump({'stateVersion': self.stateVersion}, stateFile)
+            json.dump({'ring': Ring.serialize(self.ring)}, stateFile)
 
+    def addToken(self, pos):
+        self.ring.add(pos)
+        self.gui.updateRing(self.ring)
+
+    def deleteToken(self, pos):
+        logging.critical(f"Deleting token at position {pos}")
+        self.ring.delete(pos)
+        self.gui.updateRing(self.ring)
 
 if __name__=="__main__":    
     logging = log.getLogger(logging.INFO)

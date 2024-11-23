@@ -32,36 +32,79 @@ class VirtualNode:
         return str((self.server, self.pos))
 
 class Ring:
-    def __init__(self, state):
+    def __init__(self, state, versions=None):
         self.state: SortedSet[VirtualNode] = SortedSet(state)
         self.serverName: str
         self.serverSet: set[str] = set()
+        self.versions: dict[str, int] = versions
 
     def __repr__(self):
-        return str([str(node) for node in self.state])
+        return str({
+            'state': [str(node) for node in self.state],
+            'versions': self.versions
+            })
         
-
     def merge(self, ring: Ring):
-        newServers = []
-        for node in ring.state:
+        updatedServers = set()
+        addedNodes = set()
+        deletedNodes = set()
+
+        for s, v in ring.versions.items():
+            if self.versions.get(s) is None or self.versions[s] < v:
+                updatedServers.add(s)
+        
+        if not updatedServers: return set(), set()
+        
+        for node in self.state:
+            if node.server not in updatedServers:
+                continue
             node: VirtualNode
-            self.state.add(node)
-            if node.server != self.serverName:
-                if node.server not in self.serverSet: newServers.append(node.server)
-                self.serverSet.add(node.server)
-        return newServers
+            if node not in ring.state:
+                self.state.remove(node)
+                deletedNodes.add(node)
+        
+        for node in ring.state:
+            if node.server not in updatedServers:
+                continue
+            node: VirtualNode
+            if node not in self.state:
+                self.state.add(node)
+                addedNodes.add(node)
+
+        for server in updatedServers:
+            self.versions[server] = ring.versions[server]
+
+        self.serverSet = self.serverSet.union(updatedServers)
+
+        return addedNodes, deletedNodes
 
     def serialize(self):
-        return list([vNode.server, vNode.pos] for vNode in self.state)
+        return ({
+            'state': [[vNode.server, vNode.pos] for vNode in self.state],
+            'versions': self.versions
+            })
+
+    @staticmethod
+    def deserialize(dic):
+        state = [VirtualNode(server, pos) for server, pos in dic['state']]
+        version = dic['versions']
+        return Ring(state, version)
+
     
     def init(self, serverName, numTokens, seeds):
         self.serverName = serverName
         self.serverSet = set(seeds)
         self.serverSet.discard(serverName)
+        if self.versions is None:
+            self.versions = {self.serverName: 1}
         for _ in range(numTokens):
-            print("added vnode")
             self.state.add(VirtualNode(serverName))
 
+    def load(self, dic):
+        self.state = SortedSet([VirtualNode(server, pos) for server, pos in dic['state']])
+        self.versions = dic['versions']
+        for s in self.state:
+            self.serverSet.add(s.server)
 
     def _hash(self, key: str):
         md5 = hashlib.md5(key.encode())
@@ -93,4 +136,13 @@ class Ring:
         
         return prefList
 
+    def add(self, pos):
+        self.state.add(VirtualNode(self.serverName, pos))
+        self.versions[self.serverName] += 1
+    
+    def delete(self, pos):
+        n = VirtualNode(self.serverName, pos)
+        if n in self.state:
+            self.state.remove(n)
+            self.versions[self.serverName] += 1
     

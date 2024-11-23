@@ -76,9 +76,8 @@ class Message:
             dest = message_dict["dest"]
             kwargs = {k: v for k, v in message_dict.items() if k not in {"type", "source", "id", "dest", "ring"}}
 
-            if message_dict.get('ring') is not None:
-                state = [VirtualNode(server, pos) for server, pos in message_dict['ring']]
-                kwargs['ring'] = Ring(state)
+            if message_dict.get('ring') is not None:                
+                kwargs['ring'] = Ring.deserialize(message_dict['ring'])
         except Exception as e:
             raise Exception(f"Deserialize Error: {e}, Message: {message_bytes}")
 
@@ -91,7 +90,6 @@ class Message:
             return response
         message_length = struct.unpack('!I', response[:4])[0]
         n_packets = math.ceil((message_length + 4) / BUFFER_SIZE)
-        print(n_packets)
         for _ in range(1, n_packets):
             res, _ = recv(BUFFER_SIZE)
             response += res
