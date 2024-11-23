@@ -1,7 +1,5 @@
 import socket
-import queue
 import time
-from multiprocessing import Process
 import random
 import logging
 import argparse
@@ -9,11 +7,11 @@ import os
 from abc import ABC, abstractmethod
 
 from enum import IntEnum
-from multiprocessing import Process
+from threading import Thread
+from queue import Queue
 from ring import Ring
 from message import MessageType, Message
 from storage import Storage, VersionedValue, VectorClock
-from threading import Lock
 from typing import Any, Final, Optional
 from config import *
 from operation import Operation
@@ -22,7 +20,7 @@ from gui import *
 
 SWITCH_PORT = 2000
 
-class Server(Process):
+class Server():
     def __init__(self, switch_name: str, switch_ip: str, port: int, seeds: list[str]):
         super(Server, self).__init__()
 
@@ -44,14 +42,12 @@ class Server(Process):
         
         # Unique to each server $path_to_database={datacenter_name}/{server_name}_storage.db
         self.storage = Storage(f"{self.switch_name}/{self.name}_storage.db")
-        self.cmdQueue: queue.Queue[Message] = queue.Queue()
+        self.cmdQueue: Queue[Message] = Queue()
 
-        self.lock = Lock()
-
-        self.recvThread = Process(target=self.receive_from_switch)
-        self.cmdThread = Process(target=self.command_handler)
-        self.gossipThread = Process(target=self.gossip)
-        self.gui = Process(target=self.runGUI)
+        self.recvThread = Thread(target=self.receive_from_switch)
+        self.cmdThread = Thread(target=self.command_handler)
+        self.gossipThread = Thread(target=self.gossip)
+        self.guiThread = Thread(target=self.runGUI)
 
     def connect_to_switch(self) -> None: # Connect to switch
         """At booting, connect to the Switch."""
@@ -124,7 +120,7 @@ class Server(Process):
             self.send(op.reply_msg(self.name))
             del self.operations[req.id]
 
-    def ini_operation(self, req: Message, op_thread: Process) -> None:
+    def ini_operation(self, req: Message, op_thread: Thread) -> None:
         """Add & initialize the operation for given request.(GET or PUT)"""
         key = req.kwargs["key"]
 
@@ -160,6 +156,8 @@ class Server(Process):
 
     def command_handler(self) -> None: # thread
         while True:
+            while self.cmdQueue.empty():
+                pass
             req = self.cmdQueue.get()
 
             if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
@@ -169,7 +167,7 @@ class Server(Process):
             handled = self.process_incoming_message(req)
 
             if not handled: # GET or PUT
-                op_thread = Process(target=self.exec_request, args=(req,))
+                op_thread = Thread(target=self.exec_request, args=(req,))
                 self.ini_operation(req,op_thread)  # make opeartion
 
     def get(self, key: int) -> Optional[set[VersionedValue]]:
@@ -200,8 +198,8 @@ class Server(Process):
     def gossip(self): # Thread
         logging.info(f"Starting Gossip...")
         while True:
-            logging.debug(f"Known Servers: {list(self.ring.serverSet)}, Ring State: {str(list(self.ring.state))}")
             time.sleep(config.I)
+            logging.debug(f"Known Servers: {list(self.ring.serverSet)}, Ring State: {str(list(self.ring.state))}")
             if len(self.ring.serverSet) == 0:
                 logging.warning("No Server To Gossip")
                 continue
@@ -236,11 +234,7 @@ class Server(Process):
         print("[Server] Shutting down server...")
         
         shutdownMessage = Message(-1, MessageType.SHUTDOWN, self.name, self.name)
-        self.send(shutdownMessage)
-
-        self.recvThread.terminate()
-        self.cmdThread.terminate()
-        self.gossipThread.terminate()    
+        self.send(shutdownMessage) 
         
         # Step 1: Close the socket connection
         try:
@@ -261,7 +255,7 @@ class Server(Process):
 
         # Step 3: Reset server variables
         self.operations.clear()
-        self.cmdQueue = queue.Queue()
+        self.cmdQueue = Queue()
         self.gui.exit()
 
 
@@ -274,18 +268,21 @@ class Server(Process):
         # 2. Start the recv thread to recv from Switch
         # thread to handle messages from the coordinator
 
+        self.recvThread.daemon = True
         self.recvThread.start()
 
+        self.cmdThread.daemon = True
         self.cmdThread.start()
         
+        self.gossipThread.daemon = True
         self.gossipThread.start()
 
-        self.gui.start()
+        self.guiThread.start()
         
-        self.gui.join()
-        self.gossipThread.join()
-        self.recvThread.join()
-        self.cmdThread.join()
+        self.guiThread.join()
+        # self.gossipThread.join()
+        # self.recvThread.join()
+        # self.cmdThread.join()
 
     def runGUI(self):
         self.gui = ServerGUI(self.name, self.shutdown)

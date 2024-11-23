@@ -33,7 +33,6 @@ class VirtualNode:
 class Ring:
     def __init__(self, state):
         self.state: SortedSet[VirtualNode] = SortedSet(state)
-        self.lock = Lock()
         self.serverName: str
         self.serverSet: set[str] = set()
 
@@ -67,7 +66,6 @@ class Ring:
         return int(md5.hexdigest(), 16) % config.Q
 
     def getPrefList(self, key: str) -> list[str]:
-        self.lock.acquire()
         totalTokens = len(self.state)
         hash = self._hash(key)
 
@@ -91,7 +89,6 @@ class Ring:
             if i > config.N:
                 break
         
-        self.lock.release()
         return prefList
 
     
