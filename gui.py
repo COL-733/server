@@ -3,7 +3,7 @@ from ring import Ring, VirtualNode
 
 class ServerGUI():
 
-    def __init__(self, name, shutdown):
+    def __init__(self, name, shutdown, exit):
         self.r = tk.Tk()
         self.r.title(f"Server: {name}")
         self.r.geometry("300x400")
@@ -15,6 +15,9 @@ class ServerGUI():
         self.ringLabel.pack(padx=20, pady=5)
         self.ringList = tk.Listbox(self.r)
         self.ringList.pack(padx=20)
+
+        button = tk.Button(self.r, text='Fail', width=25, command=exit)
+        button.pack(pady=20)
 
         button = tk.Button(self.r, text='Shut Down', width=25, command=shutdown)
         button.pack(pady=20)

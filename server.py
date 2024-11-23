@@ -235,10 +235,10 @@ class Server():
             for key in to_remove:
                 del self.operations[key]
 
-    def shutdown(self) -> None:
+    def shutdown(self):
         """Shutdown the server, delete the database, close the socket, and reset variables."""
         logging.info("[Server] Shutting down server...")
-        
+
         # Step 1: Close the socket connection
         try:
             self.socket.close()
@@ -265,10 +265,14 @@ class Server():
         # Step 3: Reset server variables
         self.operations.clear()
         self.cmdQueue = Queue()
-        self.gui.exit()
 
         # Final message
         logging.info("[Server] Shutdown complete.")
+        self.exit()
+
+    def exit(self) -> None:
+        self.gui.exit()
+
 
     def run(self):        
         # 2. Start the recv thread to recv from Switch
@@ -288,7 +292,7 @@ class Server():
         self.guiThread.join()
 
     def runGUI(self):
-        self.gui = ServerGUI(self.name, self.shutdown)
+        self.gui = ServerGUI(self.name, self.shutdown, self.exit)
         self.gui.updateRing(self.ring)
         self.gui.mainloop()
 
