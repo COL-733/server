@@ -9,7 +9,7 @@ from threading import Thread, Condition
 from queue import Queue
 from ring import Ring
 from message import MessageType, Message
-from storage import Storage, VersionedValue, VectorClock
+from storage import Storage, VersionedValue, VectorClock, KeyVersion
 from typing import  Optional
 from config import *
 from gui import *
@@ -27,7 +27,6 @@ class Server():
         self.switch_name: str = switch_name
         self.switch_ip: str = switch_ip
         self.seeds: list[str] = seeds
-        self.version: int = 0
 
         self.operations: dict[str, Operation] = {}
 
@@ -42,6 +41,8 @@ class Server():
         
         # Unique to each server $path_to_database={datacenter_name}/{server_name}_storage.db
         self.storage = Storage(f"{self.switch_name}/{self.name}_storage.db")
+        self.kv = KeyVersion(f"{self.switch_name}/{self.name}_key_versions.db")
+
         self.cmdQueue: Queue[Message] = Queue()
         self.cv = Condition()
 
@@ -73,7 +74,7 @@ class Server():
                     self.cmdQueue.put(msg)
                     self.cv.notify()
             except Exception as e:
-                print(f"error: {e}")
+                logging.error(f"error: {e}")
             
     def serialize_res(self, set: set[VersionedValue]) -> list:
         """Make GET RESPONSES serializable."""
@@ -112,8 +113,8 @@ class Server():
                 res = self.get(key)
                 # Only send if we've a legit GET_RESPONSE
                 if not res==None:
-                    logging.info(f"GET_RES({self.name}) = {res}")
                     kw["res"] = self.serialize_res(res)
+                    logging.info(f"{res}")
                     response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
                     self.send(response)
             elif req_type == MessageType.PUT_KEY:
@@ -129,47 +130,70 @@ class Server():
         op = self.operations.get(req.id)
         prefList = self.ring.getPrefList(req.kwargs["key"])
 
-        if op:
+        with op.cv:
             target = prefList if op.isCord else [random.choice(prefList)]
             for server in target:
-                self.send(op.response_msg(self.name, server))
+                if not self.name == server:
+                    self.send(op.response_msg(self.name, server))
+
+            if op.type == MessageType.GET:
+                logging.info(f"Waiting for Get Responses  (id, key): {op.id, op.key}")
+            else:
+                logging.info(f"Waiting for Put Acks  (id, key): {op.id, op.key}")
 
             op.cv.wait()  # Synchronize and wait for responses
+
+            if op.type == MessageType.GET:
+                logging.info(f"Got required Get Responses  (id, key): {op.id, op.key}")
+            else:
+                logging.info(f"Got required Put Acks  (id, key): {op.id, op.key}")
+
             op.syn_reconcile()
             self.send(op.reply_msg(self.name))
             del self.operations[req.id]
+            logging.info(f"Operation Completed (id, key): {op.id, op.key}")
 
     def ini_operation(self, req: Message, op_thread: Thread) -> None:
         """Add & initialize the operation for given request.(GET or PUT)"""
         key = req.kwargs["key"]
 
-        # Increase the version number
-        self.version += 1
-
         # Check wether we've key or not
         op = None
-        if self.check_key(key): # we're coordinator
+        if self.ring.check_key(key): # we're coordinator
+            
+            if self.storage.exists(key): # initiate operation with own response or ack
 
-            if req.msg_type == MessageType.GET:
-                res = self.get(key)
-                op = Operation(op_thread, req, True, res=res)
-            elif req.msg_type == MessageType.PUT:
-                if "context" in req.kwargs:
-                    # update the our version in context(context is instanvce of VectorClock)
-                    context = VectorClock(req.kwargs["context"])
-                    context.add(self.name, self.version)
+                if req.msg_type == MessageType.GET:
+                    res = self.get(key)
+                    op = Operation(op_thread, req, True, res=res)
 
-                    self.put(key, req.kwargs["value"], context)
-                    val = VersionedValue(req.kwargs["value"], context)
-                    
-                    op = Operation(op_thread, req, True, acks=1, value=val)
                 else:
-                    print(f'Operation for {key} was not created: "context" not found in message {req.id}.')
+                    if "context" in req.kwargs:
+                        # update the our version in context(context is instanvce of VectorClock)
+                        if not self.kv.exists(key):
+                            self.kv.add_key(key)
+                        else:
+                            self.kv.inc_version(key)
+
+                        version = self.kv.get_version(key)
+
+                        context = VectorClock(req.kwargs["context"])
+                        context.add(self.name, version)
+
+                        self.put(key, req.kwargs["value"], context)
+                        val = VersionedValue(req.kwargs["value"], context)
+                        
+                        op = Operation(op_thread, req, True, acks=1, value=val)
+                    else:
+                        logging.error(f'Operation for {key} was not created: "context" not found in message {req.id}.')
+
+            else: # initiate response without pre-providing
+
+                op = Operation(op_thread, req, True)
 
         else: # we're sub coordinator
 
-            if req.msg_type in {MessageType.GET, MessageType.PUT}:
-                op = Operation(op_thread, req, False)
+            op = Operation(op_thread, req, False)
         
         self.operations[req.id] = op    # Add operation
         op.start()                      # start operation thread
@@ -186,12 +210,15 @@ class Server():
                 continue
 
             handled = self.process_incoming_message(req)
-            if handled:
-                logging.info(f"Request Processed: {req.id}")
 
             if not handled: # GET or PUT
                 op_thread = Thread(target=self.exec_request, args=(req,))
-                self.ini_operation(req,op_thread)  # make opeartion
+
+                if req.msg_type in {MessageType.GET, MessageType.PUT}:
+                    self.ini_operation(req,op_thread)  # make opeartion
+                    # logging.info(f"Operation Created for (id, key)=({req.id}, {req.kwargs["key"]})")
+
+            logging.info(f"Request Processed: {req.id}")
 
     def get(self, key: int) -> Optional[set[VersionedValue]]:
         """Retrieve a value by key from local storage."""
@@ -200,14 +227,6 @@ class Server():
     def put(self, key: int, value: str,  context: VectorClock = None) -> None:
         """Store a key-value pair in local storage."""
         self.storage.add_version(key, value, context)
-
-    def check_key(self, key: int) -> bool:
-        """Check if the key exists in the local storage."""
-        # What if we don't have key but key is in the range
-        # Do one thing first change wether it's in our range or not
-        # if it is find in storage if we've return true else false
-        # Remove own self from the preflist
-        return self.storage.exists(key)
 
     def send(self, msg: Message): # To Server or Load Blanacer through Switch
         while True:
