@@ -6,7 +6,7 @@ from config import config
 from storage import VectorClock, VersionedValue
 
 class Operation:
-    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = set(), acks: int = 0):
+    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = set(), acks: int = 0, value: VersionedValue = None):
         # threading
         self.thread: threading.Thread = thread
         self.cv: threading.Condition = threading.Condition()
@@ -18,6 +18,7 @@ class Operation:
         self.source: str = msg.source
         self.type: MessageType = msg.msg_type
         self.isCord: bool = isCord
+        self.value: VersionedValue = value
 
         # To maintain the responses
         self.acks: int = acks # Initialize with 1 for own ack
@@ -58,10 +59,7 @@ class Operation:
     
     def response_msg(self, server_name: str, destination: str) -> Message:
         """Make response message for the Preference List nodes."""
-        response = {"res": self.resList} if self.type == MessageType.GET else {}
-
-        msg_type = MessageType.GET_RES if self.type == MessageType.GET else MessageType.PUT_ACK
-
+        response = {"key":self.key, "value": self.value.value, "context":self.value.vector_clock.to_dict()} if self.type == MessageType.PUT else None
         msg_type = MessageType.GET_KEY if self.type == MessageType.GET else MessageType.PUT_KEY
         
         return Message(self.id, msg_type, server_name, destination, response)
