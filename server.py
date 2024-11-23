@@ -76,12 +76,27 @@ class Server():
             except Exception as e:
                 print(f"error: {e}")
             
+    def serialize_res(self, set: set[VersionedValue]) -> list:
+        """Make GET RESPONSES serializable."""
+        serialized = []
+        for versioned_value in set:
+            serialized.append([versioned_value.value, versioned_value.vector_clock.to_dict()])
+        return serialized
+
+    def deserialize_res(self, serialized: list[list]) -> set[VersionedValue]:
+        """Deserialize a list of lists into a set of VersionedValue objects."""
+        deserialized = set()
+        for value, dict in serialized:
+            deserialized.add(VersionedValue(value, VectorClock(dict)))
+        return deserialized
+
     def process_incoming_message(self, msg: Message) -> bool:
         """Processes incoming messages and distinguishes requests from responses."""
         req_type = msg.msg_type
         msgid = msg.id
         key = msg.kwargs["key"]
 
+        logging.info(f"Proccesing message: {msgid}")
         if req_type in {MessageType.GET, MessageType.PUT}:
             return False
 
@@ -89,21 +104,22 @@ class Server():
             if msgid in self.operations:
                 op = self.operations[msgid]
                 res = msg.kwargs["res"] if "res" in msg.kwargs else None
-                op.handle_response(res=res)
+                op.handle_response(self.deserialize_res(res))
             return True
 
         else:
-            kw = {}
+            kw = {"key":key}
             if req_type == MessageType.GET_KEY:
                 res = self.get(key)
                 # Only send if we've a legit GET_RESPONSE
-                if res:
-                    kw["res"] = res
+                if not res==None:
+                    logging.info(f"GET_RES({self.name}) = {res}")
+                    kw["res"] = self.serialize_res(res)
                     response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
                     self.send(response)
             elif req_type == MessageType.PUT_KEY:
                 # Put the same version got from the coordinator
-                self.put(key, msg.kwargs["value"], msg.kwargs["context"])
+                self.put(key, msg.kwargs["value"], VectorClock(msg.kwargs["context"]))
                 response = Message(msgid, MessageType.PUT_ACK, self.name, msg.source, kw)
                 self.send(response)
 
@@ -141,18 +157,19 @@ class Server():
             elif req.msg_type == MessageType.PUT:
                 if "context" in req.kwargs:
                     # update the our version in context(context is instanvce of VectorClock)
-                    req.kwargs["context"].add(self.name, self.version)
+                    context = VectorClock(req.kwargs["context"])
+                    context.add(self.name, self.version)
 
-                    self.put(key, req.kwargs["key"], req.kwargs["context"])
-                    op = Operation(op_thread, req, True, acks=1)
+                    self.put(key, req.kwargs["value"], context)
+                    val = VersionedValue(req.kwargs["value"], context)
+                    
+                    op = Operation(op_thread, req, True, acks=1, value=val)
                 else:
                     print(f'Operation for {key} was not created: "context" not found in message {req.id}.')
 
         else: # we're sub coordinator
 
-            if req.msg_type == MessageType.GET:
-                op = Operation(op_thread, req, False)
-            elif req.msg_type == MessageType.PUT:
+            if req.msg_type in {MessageType.GET, MessageType.PUT}:
                 op = Operation(op_thread, req, False)
         
         self.operations[req.id] = op    # Add operation
@@ -170,6 +187,8 @@ class Server():
                 continue
 
             handled = self.process_incoming_message(req)
+            if handled:
+                logging.info(f"Request Processed: {req.id}")
 
             if not handled: # GET or PUT
                 op_thread = Thread(target=self.exec_request, args=(req,))

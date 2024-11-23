@@ -66,6 +66,9 @@ class VersionedValue:
     def __eq__(self, other):
         return isinstance(other, VersionedValue) and self.value == other.value and self.vector_clock == other.vector_clock
     
+    def serialize(self) -> list:
+        return [self.value, self.vector_clock.to_dict()]
+    
     def __repr__(self):
         return f"VersionedValue(value={self.value}, vector_clock={self.vector_clock})"
 
