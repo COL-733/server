@@ -72,6 +72,38 @@ class VersionedValue:
     def __repr__(self):
         return f"VersionedValue(value={self.value}, vector_clock={self.vector_clock})"
 
+class KeyVersion:
+    def __init__(self, db_path: str) -> None:
+        self.db = bsddb3.hashopen(db_path, 'c')
+
+    def encode(self, key: int) -> bytes:
+        """Convert an integer key to a bytes representation."""
+        return key.to_bytes(4, byteorder="big") if isinstance(key, int) else key
+    
+    def add_key(self, key: int):
+        """Add key to the key version storage if the key is new."""
+        key_bytes = self.encode(key)
+
+        if not self.db.has_key(key_bytes):
+            self.db[key_bytes] = 0
+
+    def get_version(self, key: int) -> int:
+        """Return version of the key"""
+        key_bytes = self.encode(key)
+
+        return self.db[key_bytes]
+    
+    def inc_version(self, key: int):
+        """Increse version of the key."""
+        key_bytes = self.encode(key)
+
+        self.db[key_bytes] += 1
+    
+    def exists(self, key: int) -> bool:
+        key_bytes = self.encode(key)
+
+        return self.db.has_key(key_bytes)
+
 class Storage:
     def __init__(self, db_path: str):
         self.db = bsddb3.hashopen(db_path, 'c')

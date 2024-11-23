@@ -110,7 +110,7 @@ class Ring:
         md5 = hashlib.md5(key.encode())
         return int(md5.hexdigest(), 16) % config.Q
 
-    def checkKey(self, key: int):
+    def check_key(self, key: int):
         return self.serverName in set(self.getPrefList(key))    
 
     def getPrefList(self, key: str) -> list[str]:
