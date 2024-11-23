@@ -7,6 +7,8 @@ from typing import Final
 from config import *
 import argparse
 import log
+import struct 
+import math
 
 class Switch:
     def __init__(self, name, topology):
@@ -34,11 +36,13 @@ class Switch:
     def recvThd(self, name):
         while True:
             try:
-                response, _ = self.servers[name].recvfrom(BUFFER_SIZE)
-                message: Message = Message.deserialize(response)
-                if message.msg_type == MessageType.SHUTDOWN:
-                    logging.critical(f"Disconnecting server {message.source}")
+                response = Message.receive_all(self.servers[name].recvfrom)
+
+                if not len(response):
+                    logging.critical(f"Disconnected from server {name}")
                     break
+
+                message: Message = Message.deserialize(response)
                 logging.info(f"Received Message: {message}")
                 with self.cv:
                     self.request_queue.put(message)

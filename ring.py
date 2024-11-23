@@ -9,8 +9,9 @@ class VirtualNode: pass
 class Ring: pass
 
 class VirtualNode:
-    def __init__(self, server: str, pos=random.randint(0, config.Q)):
+    def __init__(self, server: str, pos=None):
         self.server: str = server
+        if not pos: pos = random.randint(0, config.Q)
         self.pos: int = pos
 
     def __lt__(self, other: VirtualNode) -> bool:
@@ -58,6 +59,7 @@ class Ring:
         self.serverSet = set(seeds)
         self.serverSet.discard(serverName)
         for _ in range(numTokens):
+            print("added vnode")
             self.state.add(VirtualNode(serverName))
 
 

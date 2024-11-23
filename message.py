@@ -1,5 +1,6 @@
 import json
 import struct
+import math
 from ring import VirtualNode, Ring
 from enum import IntEnum
 from config import BUFFER_SIZE
@@ -26,7 +27,6 @@ class MessageType(IntEnum):
     ADD_SERVER_RES = 21
 
     ERROR = 22
-    SHUTDOWN = 23
     
     
 class Message:
@@ -60,7 +60,8 @@ class Message:
         message_bytes = message_json.encode('utf-8')
         message_length = len(message_bytes)
         full_message = struct.pack('!I', message_length) + message_bytes
-        padded_message = full_message.ljust(BUFFER_SIZE, b'\x00')
+        n_packets = math.ceil(len(full_message) / BUFFER_SIZE)
+        padded_message = full_message.ljust(n_packets * BUFFER_SIZE, b'\x00')
         return padded_message
 
     @staticmethod
@@ -82,3 +83,16 @@ class Message:
             raise Exception(f"Deserialize Error: {e}, Message: {message_bytes}")
 
         return Message(id, msg_type, source, dest, kwargs)
+    
+    @staticmethod
+    def receive_all(recv):
+        response, _ = recv(BUFFER_SIZE)
+        if not len(response):
+            return response
+        message_length = struct.unpack('!I', response[:4])[0]
+        n_packets = math.ceil((message_length + 4) / BUFFER_SIZE)
+        print(n_packets)
+        for _ in range(1, n_packets):
+            res, _ = recv(BUFFER_SIZE)
+            response += res
+        return response

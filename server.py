@@ -4,19 +4,17 @@ import random
 import logging
 import argparse
 import os
-from abc import ABC, abstractmethod
-
-from enum import IntEnum
+import json
 from threading import Thread, Condition
 from queue import Queue
 from ring import Ring
 from message import MessageType, Message
 from storage import Storage, VersionedValue, VectorClock
-from typing import Any, Final, Optional
+from typing import  Optional
 from config import *
+from gui import *
 from operation import Operation
 import log
-from gui import *
 
 SWITCH_PORT = 2000
 
@@ -32,6 +30,9 @@ class Server():
         self.version: int = 0
 
         self.operations: dict[str, Operation] = {}
+        
+        self.stateVersion: int = 0
+        self.loadState()
 
         # Connect to Switch
         self.socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -65,7 +66,8 @@ class Server():
         """Thread to receive messages from Switch."""
         while True:
             try:
-                response, _ = self.socket.recvfrom(BUFFER_SIZE)
+                response = Message.receive_all(self.socket.recvfrom)
+
                 msg: Message = Message.deserialize(response)
                 logging.info(f"Received Message: {msg}")
                 with self.cv:
@@ -235,38 +237,38 @@ class Server():
 
     def shutdown(self) -> None:
         """Shutdown the server, delete the database, close the socket, and reset variables."""
-        print("[Server] Shutting down server...")
-        
-        shutdownMessage = Message(-1, MessageType.SHUTDOWN, self.name, self.name)
-        self.send(shutdownMessage) 
+        logging.info("[Server] Shutting down server...")
         
         # Step 1: Close the socket connection
         try:
             self.socket.close()
-            print("[Server] Socket closed.")
+            logging.info("[Server] Socket closed.")
         except Exception as e:
-            print(f"[Server] Error closing socket: {e}")
+            logging.info(f"[Server] Error closing socket: {e}")
 
         # Step 2: Delete the database file
         db_path = f"{self.switch_name}/{self.name}_storage.db"
         try:
             os.remove(db_path)
-            print(f"[Server] Database '{db_path}' deleted.")
+            logging.info(f"[Server] Database '{db_path}' deleted.")
         except FileNotFoundError:
-            print(f"[Server] Database '{db_path}' does not exist, nothing to delete.")
+            logging.error(f"[Server] Database '{db_path}' does not exist, nothing to delete.")
         except Exception as e:
-            print(f"[Server] Error deleting database '{db_path}': {e}")
+            logging.error(f"[Server] Error deleting database '{db_path}': {e}")
+
+        try:
+            os.remove(f"{self.switch_name}/{self.name}_state.json")
+        except Exception as e:
+            logging.error(e)
+
 
         # Step 3: Reset server variables
         self.operations.clear()
         self.cmdQueue = Queue()
         self.gui.exit()
 
-
-        print("[Server] Reset server variables.")
-
         # Final message
-        print("[Server] Shutdown complete.")
+        logging.info("[Server] Shutdown complete.")
 
     def run(self):        
         # 2. Start the recv thread to recv from Switch
@@ -290,9 +292,23 @@ class Server():
         self.gui.updateRing(self.ring)
         self.gui.mainloop()
 
+    def loadState(self):
+        filePath = f"{self.switch_name}/{self.name}_state.json"
+        if os.path.exists(filePath):
+            with open(filePath, 'r') as stateFile:
+                state = json.load(stateFile)
+                self.stateVersion = state['stateVersion']
+        else:
+            self.saveState()
+    
+    def saveState(self):
+        filePath = f"{self.switch_name}/{self.name}_state.json"
+        with open(filePath, 'w') as stateFile:
+            json.dump({'stateVersion': self.stateVersion}, stateFile)
+
 
 if __name__=="__main__":    
-    logging = log.getLogger(logging.DEBUG)
+    logging = log.getLogger(logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('-sw', help = "Switch Name", required=True)
     parser.add_argument('-port', help = "Port Number", required=True, type=int)
