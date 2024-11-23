@@ -6,7 +6,7 @@ from config import config
 from storage import VectorClock, VersionedValue
 
 class Operation:
-    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: list[Any] = set(), acks: int = 0, value: VersionedValue = None):
+    def __init__(self, thread: threading.Thread, msg: Message, isCord: bool, res: set[VersionedValue] = set(), acks: int = 0, value: VersionedValue = None):
         # threading
         self.thread: threading.Thread = thread
         self.cv: threading.Condition = threading.Condition()
@@ -21,8 +21,8 @@ class Operation:
         self.value: VersionedValue = value
 
         # To maintain the responses
-        self.acks: int = acks # Initialize with 1 for own ack
-        self.resList: set[VersionedValue] = res # for get initialize with own response
+        self.acks: int = acks
+        self.resList: set[VersionedValue] = res
     
     def start(self) -> None:
         """Start the Opeartion thread."""
@@ -59,13 +59,20 @@ class Operation:
     
     def response_msg(self, server_name: str, destination: str) -> Message:
         """Make response message for the Preference List nodes."""
-        response = {"key":self.key, "value": self.value.value, "context":self.value.vector_clock.to_dict()} if self.type == MessageType.PUT else None
+        response = {"key":self.key, "value": self.value.value, "context":self.value.vector_clock.to_dict()} if self.type == MessageType.PUT else {"key":self.key}
         msg_type = MessageType.GET_KEY if self.type == MessageType.GET else MessageType.PUT_KEY
         
         return Message(self.id, msg_type, server_name, destination, response)
 
+    def serialize_res(self, set: set[VersionedValue]) -> list:
+        """Make GET RESPONSES serializable."""
+        serialized = []
+        for versioned_value in set:
+            serialized.append([versioned_value.value, versioned_value.vector_clock.to_dict()])
+        return serialized
+    
     def reply_msg(self, server_name: str) -> Message:
         """Make reply message for the source nodes."""
-        response = {"res": self.resList} if self.type == MessageType.GET else {}
+        response = {"key":self.key, "res": self.serialize_res(self.resList)} if self.type == MessageType.GET else {"key":self.key}
         msg_type = MessageType.GET_RES if self.type == MessageType.GET else MessageType.PUT_ACK
         return Message(self.id, msg_type, server_name, self.source, response)
