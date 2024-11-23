@@ -313,7 +313,7 @@ class Server():
         self.guiThread.join()
 
     def runGUI(self):
-        self.gui = ServerGUI(self.name, self.shutdown, self.exit, self.deleteToken)
+        self.gui = ServerGUI(self.name, self.shutdown, self.exit, self.deleteToken, self.addToken)
         self.gui.updateRing(self.ring)
         self.gui.mainloop()
 
