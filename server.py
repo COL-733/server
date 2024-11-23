@@ -211,6 +211,7 @@ class Server():
     def handle_gossips(self, msg: Message):
         # merge incoming ring
         newServers = self.ring.merge(msg.kwargs['ring'])
+        self.gui.updateRing(self.ring)
         for serv in newServers:
             logging.critical(f"Identified New Server {serv}")
         # send own ring
@@ -280,12 +281,10 @@ class Server():
         self.guiThread.start()
         
         self.guiThread.join()
-        # self.gossipThread.join()
-        # self.recvThread.join()
-        # self.cmdThread.join()
 
     def runGUI(self):
         self.gui = ServerGUI(self.name, self.shutdown)
+        self.gui.updateRing(self.ring)
         self.gui.mainloop()
 
 
