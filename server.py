@@ -7,7 +7,7 @@ import os
 from abc import ABC, abstractmethod
 
 from enum import IntEnum
-from threading import Thread
+from threading import Thread, Condition
 from queue import Queue
 from ring import Ring
 from message import MessageType, Message
@@ -43,6 +43,7 @@ class Server():
         # Unique to each server $path_to_database={datacenter_name}/{server_name}_storage.db
         self.storage = Storage(f"{self.switch_name}/{self.name}_storage.db")
         self.cmdQueue: Queue[Message] = Queue()
+        self.cv = Condition()
 
         self.recvThread = Thread(target=self.receive_from_switch)
         self.cmdThread = Thread(target=self.command_handler)
@@ -67,8 +68,9 @@ class Server():
                 response, _ = self.socket.recvfrom(BUFFER_SIZE)
                 msg: Message = Message.deserialize(response)
                 logging.info(f"Received Message: {msg}")
-                # with self.lock:
-                self.cmdQueue.put(msg)
+                with self.cv:
+                    self.cmdQueue.put(msg)
+                    self.cv.notify()
             except Exception as e:
                 print(f"error: {e}")
             
@@ -156,8 +158,9 @@ class Server():
 
     def command_handler(self) -> None: # thread
         while True:
-            while self.cmdQueue.empty():
-                pass
+            with self.cv:
+                while self.cmdQueue.empty():
+                    self.cv.wait()
             req = self.cmdQueue.get()
 
             if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
