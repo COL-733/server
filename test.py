@@ -53,8 +53,10 @@ class TestVectorClock(unittest.TestCase):
 
         # Merge vc2 into vc1
         vc1.merge(vc2)
+        vc2.merge(vc1)
         expected_result = {"server1": 2, "server2": 4, "server3": 1}
         self.assertEqual(vc1.to_dict(), expected_result)
+        self.assertEqual(vc2.to_dict(), expected_result)
 
         # Test merging with an empty clock
         vc_empty = VectorClock()
