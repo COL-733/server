@@ -76,30 +76,30 @@ class KeyVersion:
     def __init__(self, db_path: str) -> None:
         self.db = bsddb3.hashopen(db_path, 'c')
 
-    def encode(self, key: int) -> bytes:
+    def encode(self, key: str) -> bytes:
         """Convert an integer key to a bytes representation."""
-        return key.to_bytes(4, byteorder="big") if isinstance(key, int) else key
+        return bytes(key, 'utf-8') if isinstance(key, str) else key
     
-    def add_key(self, key: int):
+    def add_key(self, key: str):
         """Add key to the key version storage if the key is new."""
         key_bytes = self.encode(key)
 
         if not self.db.has_key(key_bytes):
             self.db[key_bytes] = 0
 
-    def get_version(self, key: int) -> int:
+    def get_version(self, key: str) -> int:
         """Return version of the key"""
         key_bytes = self.encode(key)
 
         return self.db[key_bytes]
     
-    def inc_version(self, key: int):
+    def inc_version(self, key: str):
         """Increse version of the key."""
         key_bytes = self.encode(key)
 
         self.db[key_bytes] += 1
     
-    def exists(self, key: int) -> bool:
+    def exists(self, key: str) -> bool:
         key_bytes = self.encode(key)
 
         return self.db.has_key(key_bytes)
@@ -109,9 +109,9 @@ class Storage:
         self.db = bsddb3.hashopen(db_path, 'c')
         self.lock = threading.Lock()
 
-    def encode(self, key: int) -> bytes:
+    def encode(self, key: str) -> bytes:
         """Convert an integer key to a bytes representation."""
-        return key.to_bytes(4, byteorder="big") if isinstance(key, int) else key
+        return bytes(key, 'utf-8') if isinstance(key, str) else key
 
     @staticmethod
     def compare_versioned_value(v1: str|VersionedValue, v2: VersionedValue) -> str:
@@ -139,7 +139,7 @@ class Storage:
             # Initialize an empty adjacency list with a root node
             return {"root": set(), "leaves": {"root"}}
 
-    def add_version(self, key: int, value: str ,context: VectorClock) -> None:
+    def add_version(self, key: str, value: Any ,context: VectorClock) -> None:
         """Add a new versioned value to the version tree for the given key."""
         key_bytes = self.encode(key)
         version_value = VersionedValue(value, context)
@@ -213,7 +213,7 @@ class Storage:
             # Save the updated tree
             self.db[key_bytes] = pickle.dumps(tree)
 
-    def get_leaf_nodes(self, key: int) -> Optional[set[VersionedValue]]:
+    def get_leaf_nodes(self, key: str) -> Optional[set[VersionedValue]]:
         """Retrieve the leaf nodes for the given key."""
         key_bytes = self.encode(key)
 
@@ -223,12 +223,12 @@ class Storage:
         else:
             return None
 
-    def get_version_tree(self, key: int) -> dict[str |VersionedValue, set[VersionedValue]]:
+    def get_version_tree(self, key: str) -> dict[str |VersionedValue, set[VersionedValue]]:
         """Retrieve the full version tree for the given key."""
         key_bytes = self.encode(key)
         return self._load_tree(key_bytes)
 
-    def exists(self, key: int) -> bool:
+    def exists(self, key: str) -> bool:
         """Checks wether we've key or not"""
         key_bytes = self.encode(key)
         return self.db.has_key(key_bytes)

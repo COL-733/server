@@ -106,14 +106,14 @@ def main():
             if args[1] == "all":
                 for i in range(1,9):
                     msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{4000}", f"{switch_name}_{args[2]}" ,
-                                {"key": 1, "value": f"value{i}", "context": temp[f"context{i}"].to_dict() })
+                                {"key": "1", "value": [f"value{i}"], "context": [temp[f"context{i}"].to_dict()] })
                     
                     # print({"key":args[1], "value": f"value{args[1]}", "context": temp[f"context{args[1]}"] })
                     id+=1
                     cl.socket.send(msg.serialize())
             else:
                 msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{4000}", f"{switch_name}_{args[2]}" ,
-                            {"key": 1, "value": f"value{args[1]}", "context": temp[f"context{args[1]}"].to_dict() })
+                            {"key": "1", "value": [f"value{args[1]}"], "context": [temp[f"context{args[1]}"].to_dict()] })
                 
                 # print({"key":args[1], "value": f"value{args[1]}", "context": temp[f"context{args[1]}"] })
                 id+=1
@@ -121,7 +121,7 @@ def main():
         
         if args[0] == "get":
             msg = Message(id, MessageType.GET_KEY, f"{switch_name}_{5001}", f"{switch_name}_{args[2]}" ,
-                          {"key": int(args[1]) })
+                          {"key": args[1] })
             
             # print({"key":args[1], "value": f"value{args[1]}", "context": temp[f"context{args[1]}"] })
             id+=1

@@ -76,19 +76,55 @@ class Server():
             except Exception as e:
                 logging.error(f"error: {e}")
             
-    def serialize_res(self, set: set[VersionedValue]) -> list:
+    def serialize_res(self, set: set[VersionedValue]) -> list[list]:
         """Make GET RESPONSES serializable."""
         serialized = []
+        value = []
+        vector_clocks = []
         for versioned_value in set:
-            serialized.append([versioned_value.value, versioned_value.vector_clock.to_dict()])
+            value.append(versioned_value.value)
+            vector_clocks.append(versioned_value.vector_clock.to_dict())
+
+        serialized.append(value)
+        serialized.append(vector_clocks)
         return serialized
 
     def deserialize_res(self, serialized: list[list]) -> set[VersionedValue]:
         """Deserialize a list of lists into a set of VersionedValue objects."""
         deserialized = set()
-        for value, dict in serialized:
-            deserialized.add(VersionedValue(value, VectorClock(dict)))
+
+        if (not len(serialized[0]) == len(serialized[1])) and len(serialized[0])==1:
+
+            new_vc = VectorClock()
+            for vc in serialized[1]:
+                new_vc = new_vc.merge(vc)
+            
+            deserialized.add(VersionedValue(serialized[0],new_vc))
+        
+        else:
+
+            for i in range(0,len(serialized[0])):
+                deserialized.add(VersionedValue(serialized[0][i], VectorClock(serialized[1][i])))
+
         return deserialized
+    
+    def deserialize_put(self, value: list, vcs: list) -> VersionedValue:
+        """Deserialize a list of lists into a set of VersionedValue objects."""
+
+        if len(value)==1:
+            
+            if len(vcs) == 1:
+                new_vc = VectorClock(vcs[0])
+            else:
+                new_vc = VectorClock()
+                for vc in vcs:
+                    new_vc = new_vc.merge(VectorClock(vc))
+                
+            return VersionedValue(value[0],new_vc)
+        
+        else:
+
+            return None
 
     def process_incoming_message(self, msg: Message) -> bool:
         """Processes incoming messages and distinguishes requests from responses."""
@@ -103,13 +139,15 @@ class Server():
         elif req_type in {MessageType.GET_RES, MessageType.PUT_ACK}:
             if msgid in self.operations:
                 op = self.operations[msgid]
-                res = msg.kwargs["res"] if "res" in msg.kwargs else None
-                op.handle_response(self.deserialize_res(res))
+                res = self.deserialize_res(msg.kwargs["res"]) if "res" in msg.kwargs else None
+                op.handle_response(res)
             return True
 
         else:
             kw = {"key":key}
+
             if req_type == MessageType.GET_KEY:
+
                 res = self.get(key)
                 # Only send if we've a legit GET_RESPONSE
                 if not res==None:
@@ -117,11 +155,18 @@ class Server():
                     logging.info(f"{res}")
                     response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
                     self.send(response)
+
             elif req_type == MessageType.PUT_KEY:
                 # Put the same version got from the coordinator
-                self.put(key, msg.kwargs["value"], VectorClock(msg.kwargs["context"]))
-                response = Message(msgid, MessageType.PUT_ACK, self.name, msg.source, kw)
-                self.send(response)
+                
+                versioned_value = self.deserialize_put(msg.kwargs["value"], msg.kwargs["context"] )
+
+                if versioned_value:
+                    self.put(key, versioned_value.value, versioned_value.vector_clock)
+                    response = Message(msgid, MessageType.PUT_ACK, self.name, msg.source, kw)
+                    self.send(response)
+                else:
+                    logging.error(f"More than one value given for : {msgid}.")
 
             return True
 
@@ -177,13 +222,13 @@ class Server():
 
                         version = self.kv.get_version(key)
 
-                        context = VectorClock(req.kwargs["context"])
-                        context.add(self.name, version)
+                        versioned_value = self.deserialize_put(req.kwargs["value"], req.kwargs["context"] )
 
-                        self.put(key, req.kwargs["value"], context)
-                        val = VersionedValue(req.kwargs["value"], context)
+                        versioned_value.vector_clock.add(self.name, version)
+
+                        self.put(key, versioned_value.value , versioned_value.vector_clock)
                         
-                        op = Operation(op_thread, req, True, acks=1, value=val)
+                        op = Operation(op_thread, req, True, acks=1, value=versioned_value)
                     else:
                         logging.error(f'Operation for {key} was not created: "context" not found in message {req.id}.')
 
@@ -220,11 +265,11 @@ class Server():
 
             logging.info(f"Request Processed: {req.id}")
 
-    def get(self, key: int) -> Optional[set[VersionedValue]]:
+    def get(self, key: str) -> Optional[set[VersionedValue]]:
         """Retrieve a value by key from local storage."""
         return self.storage.get_leaf_nodes(key)
 
-    def put(self, key: int, value: str,  context: VectorClock = None) -> None:
+    def put(self, key: str, value: str,  context: VectorClock = None) -> None:
         """Store a key-value pair in local storage."""
         self.storage.add_version(key, value, context)
 
