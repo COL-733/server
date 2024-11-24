@@ -48,12 +48,11 @@ class Switch:
         while True:
             try:
                 (data,addr) = self.switchSocket.recvfrom(BUFFER_SIZE)
-                logging.critical(f"Got message from Switch")
-                # message: Message = Message.deserialize(response)
-                # logging.info(f"Received Message: {message}")
-                # with self.cv:
-                #     self.request_queue.put(message)
-                #     self.cv.notify()
+                message: Message = Message.deserialize(data)
+                logging.info(f"Received Message: {message}")
+                with self.cv:
+                    self.request_queue.put(message)
+                    self.cv.notify()
 
             except Exception as e:
                 logging.error(e)
@@ -109,6 +108,7 @@ class Switch:
         logging.info(f"Forwarding message to switch {name}")
         if self.routingTable.get(name) is not None:
             # try:
+            print(self.routingTable[name])
             self.switchSocket.sendto(msg.serialize(), (self.routingTable[name], SWITCH_SWITCH_PORT))
             # except:
             #     logging.error(f"Cannot send message to switch {name}")
