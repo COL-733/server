@@ -223,10 +223,13 @@ class Server():
         while True:
             time.sleep(config.I)
             logging.debug(f"Known Servers: {list(self.ring.serverSet)}, Ring State: {str(list(self.ring.state))}")
-            if len(self.ring.serverSet) == 0:
+            gossipSet = self.ring.serverSet
+            gossipSet.discard(self.name)
+
+            if len(gossipSet) == 0:
                 logging.warning("No Server To Gossip")
                 continue
-            gossipList = random.sample(list(self.ring.serverSet), min(len(self.ring.serverSet), config.G))
+            gossipList = random.sample(list(gossipSet), min(len(gossipSet), config.G))
             for server in gossipList:
                 message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, {'ring': self.ring})
                 self.send(message)
