@@ -11,6 +11,7 @@ import struct
 import math
 from gui import SwitchGUI
 import random
+from gui import SwitchGUI
 
 class Switch:
     def __init__(self, name, topology):
