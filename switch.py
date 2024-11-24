@@ -48,8 +48,13 @@ class Switch:
     def recvFromSwitches(self):
         while True:
             try:
-                (data,addr) = self.switchSocket.recvfrom(BUFFER_SIZE)
-                message: Message = Message.deserialize(data)
+                response = Message.receive_all(self.switchSocket.recvfrom)
+                
+                if not len(response):
+                    logging.warning(f"Bad Message from switch")
+                    break
+                
+                message = Message.deserialize(response)
                 logging.info(f"Received Message: {message}")
                 with self.cv:
                     self.request_queue.put(message)
@@ -108,11 +113,10 @@ class Switch:
         name = dest.split('_')[0]
         logging.info(f"Forwarding message to switch {name}")
         if self.routingTable.get(name) is not None:
-            # try:
-            print(self.routingTable[name])
-            self.switchSocket.sendto(msg.serialize(), (self.routingTable[name], SWITCH_SWITCH_PORT))
-            # except:
-            #     logging.error(f"Cannot send message to switch {name}")
+            try:
+                self.switchSocket.sendto(msg.serialize(), (self.routingTable[name], SWITCH_SWITCH_PORT))
+            except:
+                logging.error(f"Cannot send message to switch {name}")
         else:
             logging.warning(f"Switch {name} is not in routing table")
 
