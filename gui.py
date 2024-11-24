@@ -100,21 +100,21 @@ class SwitchGUI():
         self.nameEntry = tk.Entry(self.r, width=8)
         self.nameEntry.grid(row=1, column=1, padx=2, pady=2, sticky=tk.W)
 
-        addButton = tk.Button(self.r, text='Connect', width=10, command=self.add)
+        addButton = tk.Button(self.r, text='Connect', width=10, command=self.addSwitch)
         addButton.grid(row=3, column=0, pady=2)        
 
         self.serverList = tk.Listbox(self.r, height=5, selectmode='single')
         self.serverList.grid(row=4, column=0, sticky=tk.W, pady=2)
         
-        removeButton = tk.Button(self.r, text='Connect', width=10, command=self.rem)
-        removeButton.grid(row=3, column=0, pady=2)        
+        # removeButton = tk.Button(self.r, text='Connect', width=10, command=self.remSwitch)
+        # removeButton.grid(row=3, column=0, pady=2)        
 
-    def add(self):
+    def addSwitch(self):
         addr = self.addrEntry.get()
         name = self.nameEntry.get()
-        self.add_fn(addr, name)        
+        self.add_fn(addr, name)
 
-    def rem(self):
+    def remSwitch(self):
         try:
             name = self.serverList.curselection()[0]
             self.rem_fn(name)

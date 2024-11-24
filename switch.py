@@ -42,10 +42,10 @@ class Switch:
         guiThd = Thread(target=self.runGUI)
         guiThd.start()
 
-    def recvThd(self, name):
+    def recvThd(self, socket, name):
         while True:
             try:
-                response = Message.receive_all(self.servers[name].recvfrom)
+                response = Message.receive_all(socket.recvfrom)
 
                 if not len(response):
                     logging.critical(f"Disconnected from server {name}")
@@ -59,7 +59,7 @@ class Switch:
 
             except Exception as e:
                 logging.error(e)
-    
+
     def sendThd(self):
         while True:
             with self.cv:
@@ -79,7 +79,7 @@ class Switch:
             logging.info(f"Connected to server at port {port}")
             name = self.name+"_"+str(port)
             self.servers[name] = c
-            recvThd = Thread(target=self.recvThd, args=(name,))
+            recvThd = Thread(target=self.recvThd, args=(c, name))
             recvThd.start()
 
     def sendToServer(self, msg: Message, dest: str):
@@ -126,14 +126,13 @@ class Switch:
             name = padded_message[:padded_name.index('\x00')]
             logging.critical(f"Connected to switch {name}")
             self.servers[name] = c
-            recvThd = Thread(target=self.recvThd, args=(name,))
+            recvThd = Thread(target=self.recvThd, args=(c, name))
             recvThd.start()        
 
     def addSwitch(self, addr, name):
         switchSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        switchSocket.connect((addr, SWITCH_SWITCH_PORT))
-
         self.routingTable[name] = switchSocket
+        logging.critical(f"Added new switch {name} to routing table")
         self.gui.updateList(list(self.routingTable.keys()))
 
     def removeSwitch(self, name):
