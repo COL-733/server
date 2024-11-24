@@ -83,11 +83,13 @@ class ServerGUI():
 
 
 class SwitchGUI():
-    def __init__(self, serverName, add, rem):
+    def __init__(self, switchName, add, rem):
         self.r = tk.Tk()
         self.add_fn = add
         self.rem_fn = rem
         
+        self.r.title(f"Switch: {switchName}")
+
         addrLabel = tk.Label(self.r, text=f"Address of switch to connect:")
         addrLabel.grid(row=0, column=0, sticky=tk.W, pady=2)
 
