@@ -27,8 +27,10 @@ class LoadBalancer(Process):
         self.switch_ip: str = switch_ip
         self.server_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.switch_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.dict_client : dict[str,socket.socket] = {}
         self.client_request_queue: queue.Queue = queue.Queue()
         self.port = port
+        self.run()
         
     def handle_client(self, client_socket: socket.socket):
         try:
@@ -37,12 +39,29 @@ class LoadBalancer(Process):
                 if not data:
                     break
                 message = Message.deserialize(data)
+                message.dest = self.name
+                switchn = self.name.split("_")[0]
+                message.source = switchn + "_client_" +  message.source
                 self.client_request_queue.put(message)
         except Exception as e:
             logging.error(f"Error in handle_client: {e}", exc_info=True)
         finally:
             client_socket.close()
             logging.info(f"{self.name} client handler thread exiting")
+
+    def send_to_client(self,msg:Message) :
+        self.dict_client[msg.dest.split("_")[2]].send(msg.serialize())
+    def receive_from_switch(self) -> None:
+        """Thread to receive messages from Switch."""
+        while True:
+            try:
+                response, _ = self.switch_socket.recvfrom(1024)
+                msg: Message = Message.deserialize(response)
+                logging.info(f"Received Message: {msg}")
+                ret = self.send_to_client(msg)
+            except Exception as e:
+                logging.error(f"Error in receive_from_switch: {e}")
+                break
 
     def handle_query(self):
         while True:
@@ -65,12 +84,15 @@ class LoadBalancer(Process):
         query_handler = threading.Thread(target=self.handle_query)
         query_handler.daemon = True
         query_handler.start()
-        
+        receiver_thread = threading.Thread(target=self.receive_from_switch)
+        receiver_thread.daemon = True
+        receiver_thread.start()
         # Accept client connections
         while True:
             try:
                 client_socket, addr = self.server_socket.accept()
                 logging.info(f"{self.name} accepted connection from {addr}")
+                self.dict_client[addr[1]] =client_socket
                 client_handler = threading.Thread(target=self.handle_client, args=(client_socket,))
                 client_handler.daemon = True
                 client_handler.start()
@@ -102,7 +124,6 @@ class LoadBalancer(Process):
 if __name__ == "__main__":
     logging = log.getLogger(logging.DEBUG)
     lb = LoadBalancer(sys.argv[1], '', LB_PORT)
-    lb.run()
     while True:
         id, dest = input().split()
         lb.send_test(id, dest)
