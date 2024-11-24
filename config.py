@@ -1,6 +1,7 @@
 from typing import Final
 
 SWITCH_PORT: Final[int] = 2000
+SWITCH_SWITCH_PORT: Final[int] = 2001
 LB_TO_SWITCH_PORT: Final[int] = 3000
 LB_PORT: Final[int] = 4000
 

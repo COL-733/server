@@ -80,3 +80,52 @@ class ServerGUI():
             self.add_fn(pos)
         except:
             pass
+
+
+class SwitchGUI():
+    def __init__(self, serverName, add, rem):
+        self.r = tk.Tk()
+        self.add_fn = add
+        self.rem_fn = rem
+        
+        addrLabel = tk.Label(self.r, text=f"Address of switch to connect:")
+        addrLabel.grid(row=0, column=0, sticky=tk.W, pady=2)
+
+        self.addrEntry = tk.Entry(self.r, width=8)
+        self.addrEntry.grid(row=0, column=1, padx=2, pady=2, sticky=tk.W)
+        
+        nameLabel = tk.Label(self.r, text=f"Name of switch to connect:")
+        nameLabel.grid(row=1, column=0, sticky=tk.W, pady=2)
+
+        self.nameEntry = tk.Entry(self.r, width=8)
+        self.nameEntry.grid(row=1, column=1, padx=2, pady=2, sticky=tk.W)
+
+        addButton = tk.Button(self.r, text='Connect', width=10, command=self.add)
+        addButton.grid(row=3, column=0, pady=2)        
+
+        self.serverList = tk.Listbox(self.r, height=5, selectmode='single')
+        self.serverList.grid(row=4, column=0, sticky=tk.W, pady=2)
+        
+        removeButton = tk.Button(self.r, text='Connect', width=10, command=self.rem)
+        removeButton.grid(row=3, column=0, pady=2)        
+
+    def add(self):
+        addr = self.addrEntry.get()
+        name = self.nameEntry.get()
+        self.add_fn(addr, name)        
+
+    def rem(self):
+        try:
+            name = self.serverList.curselection()[0]
+            self.rem_fn(name)
+        except:
+            pass
+
+    def updateList(self, names):
+        self.serverList.delete(0, tk.END)
+        for i in range(len(names)):
+            name = names[i]
+            self.serverList.insert(i, name)
+
+    def mainloop(self):
+        self.r.mainloop()
