@@ -93,5 +93,45 @@ class Ring:
         
         self.lock.release()
         return prefList
+    def get_current_position(self, key: str) -> int:
+        self.lock.acquire()
+        try:
+            totalTokens = len(self.state)
+            hash = self._hash(key)
 
+            coord = 0
+            for i in range(totalTokens):
+                if self.state[i].pos >= hash:
+                    coord = i
+                    break
+            uniqueNodes = set()
+            i = 0
+            last_idx = coord
+            while len(uniqueNodes) < self.N:
+                idx = (coord + i) % totalTokens
+                v = self.state[idx]
+                if v.server not in uniqueNodes:
+                    uniqueNodes.add(v.server)
+                    last_idx = idx
+                
+                i += 1
+                if i > config.N:
+                    break
+            
+            return (last_idx + 1) % totalTokens
+            
+        finally:
+            self.lock.release()
+    def give_next_hinted(self,i: int,key:str) -> str:
+        self.lock.acquire()
+        try:
+            j = self.get_current_position(key)
+            totalTokens = len(self.state)
+            if i >= totalTokens:
+                i = i % totalTokens
+                
+            target_idx = (j + i) % totalTokens
+            return self.state[target_idx].server
+        finally:
+            self.lock.release()
     
