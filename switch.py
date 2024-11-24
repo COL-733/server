@@ -25,11 +25,11 @@ class Switch:
         self.socket.bind(('', SWITCH_PORT))
         self.socket.listen(5)
 
-        self.routingTable: dict[str, socket.socket] = dict()
-        self.switchSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.routingTable: dict[str, str] = dict()
+        hostName = socket.gethostbyname('0.0.0.0')
+        self.switchSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.switchSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.switchSocket.bind(('', SWITCH_SWITCH_PORT))
-        self.switchSocket.listen(5)
+        self.switchSocket.bind((hostName, SWITCH_SWITCH_PORT))
 
         sendThd = Thread(target=self.sendThd)
         sendThd.daemon = True
@@ -41,6 +41,23 @@ class Switch:
 
         guiThd = Thread(target=self.runGUI)
         guiThd.start()
+
+        recvServThd = Thread(target=self.recvFromSwitches)
+        recvServThd.start()      
+
+    def recvFromSwitches(self):
+        while True:
+            try:
+                (data,addr) = self.switchSocket.recvfrom(BUFFER_SIZE)
+                logging.critical(f"Got message from Switch")
+                # message: Message = Message.deserialize(response)
+                # logging.info(f"Received Message: {message}")
+                # with self.cv:
+                #     self.request_queue.put(message)
+                #     self.cv.notify()
+
+            except Exception as e:
+                logging.error(e)
 
     def recvThd(self, socket, name):
         while True:
@@ -90,11 +107,12 @@ class Switch:
    
     def sendToSwitch(self, msg: Message, dest: str):
         name = dest.split('_')[0]
-        if self.routingTable.get(dest) is not None:
-            try:
-                self.routingTable[name].send(msg.serialize())
-            except:
-                logging.error(f"Cannot send message to switch {name}")
+        logging.info(f"Forwarding message to switch {name}")
+        if self.routingTable.get(name) is not None:
+            # try:
+            self.switchSocket.sendto(msg.serialize(), (self.routingTable[name], SWITCH_SWITCH_PORT))
+            # except:
+            #     logging.error(f"Cannot send message to switch {name}")
         else:
             logging.warning(f"Switch {name} is not in routing table")
 
@@ -115,23 +133,8 @@ class Switch:
             else:
                 self.sendToSwitch(msg, dest)
 
-    def connectSwitchLoop(self):
-        while True:
-            c, addr = self.switchSocket.accept()
-            message_bytes = self.name.encode('utf-8')
-            padded_message = message_bytes.ljust(BUFFER_SIZE, b'\x00')
-            c.send(padded_message)
-            res = c.recv(BUFFER_SIZE)
-            padded_name = res.decode('utf-8')
-            name = padded_message[:padded_name.index('\x00')]
-            logging.critical(f"Connected to switch {name}")
-            self.servers[name] = c
-            recvThd = Thread(target=self.recvThd, args=(c, name))
-            recvThd.start()        
-
     def addSwitch(self, addr, name):
-        switchSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.routingTable[name] = switchSocket
+        self.routingTable[name] = addr
         logging.critical(f"Added new switch {name} to routing table")
         self.gui.updateList(list(self.routingTable.keys()))
 
