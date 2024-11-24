@@ -14,7 +14,7 @@ class Operation:
 
         # metadata
         self.id: int = msg.id
-        self.key: int = msg.kwargs["key"]
+        self.key: str = msg.kwargs["key"]
         self.source: str = msg.source
         self.type: MessageType = msg.msg_type
         self.isCord: bool = isCord
@@ -59,16 +59,24 @@ class Operation:
     
     def response_msg(self, server_name: str, destination: str) -> Message:
         """Make response message for the Preference List nodes."""
-        response = {"key":self.key, "value": self.value.value, "context":self.value.vector_clock.to_dict()} if self.type == MessageType.PUT else {"key":self.key}
+        response = {"key":self.key, "value": [self.value.value], "context":[self.value.vector_clock.to_dict()]} if self.type == MessageType.PUT else {"key":self.key}
         msg_type = MessageType.GET_KEY if self.type == MessageType.GET else MessageType.PUT_KEY
         
         return Message(self.id, msg_type, server_name, destination, response)
 
-    def serialize_res(self, set: set[VersionedValue]) -> list:
-        """Make GET RESPONSES serializable."""
+    def serialize_res(self, set: set[VersionedValue]) -> list[list]:
+        """Make GET RESPONSES serializable.
+        list[ list[value], list[vector_clocks] ]
+        """
         serialized = []
+        value = []
+        vector_clocks = []
         for versioned_value in set:
-            serialized.append([versioned_value.value, versioned_value.vector_clock.to_dict()])
+            value.append(versioned_value.value)
+            vector_clocks.append(versioned_value.vector_clock.to_dict())
+
+        serialized.append(value)
+        serialized.append(vector_clocks)
         return serialized
     
     def reply_msg(self, server_name: str) -> Message:
