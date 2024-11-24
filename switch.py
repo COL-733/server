@@ -12,6 +12,7 @@ import math
 from gui import SwitchGUI
 import random
 from gui import SwitchGUI
+import random
 
 class Switch:
     def __init__(self, name, topology):
