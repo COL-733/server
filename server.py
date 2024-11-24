@@ -350,7 +350,13 @@ if __name__=="__main__":
 
     switch_name = args.sw
 
-    seeds = [f"{switch_name}_{port}" for port in args.seeds if port != args.port]
+    seeds = []
+
+    num_seeds = len(args.seeds) // 2
+    for i in range(num_seeds):
+        sw = args.seeds[2*i]
+        port = args.seeds[2*i+1]
+        seeds.append(f"{switch_name}_{port}")
 
     server = Server(switch_name, '', args.port, seeds)
     server.run()

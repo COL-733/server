@@ -10,10 +10,11 @@ import log
 import struct 
 import math
 import random
+from gui import SwitchGUI
 
 class Switch:
     def __init__(self, name, topology):
-        self.name = name
+        self.name: str = name
         self.topology = topology
         self.servers: dict[str, socket.socket] = dict()
         self.request_queue = Queue()
@@ -24,15 +25,22 @@ class Switch:
         self.socket.bind(('', SWITCH_PORT))
         self.socket.listen(5)
 
+        self.routingTable: dict[str, socket.socket] = dict()
+        self.switchSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.switchSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.switchSocket.bind(('', SWITCH_SWITCH_PORT))
+        self.switchSocket.listen(5)
+
         sendThd = Thread(target=self.sendThd)
+        sendThd.daemon = True
         sendThd.start()
 
         connectThd = Thread(target=self.connectServerLoop)
+        connectThd.daemon = True
         connectThd.start()
 
-        sendThd.join()
-        connectThd.join()
-        
+        guiThd = Thread(target=self.runGUI)
+        guiThd.start()
 
     def recvThd(self, name):
         while True:
@@ -78,12 +86,17 @@ class Switch:
         if self.servers.get(dest) is not None:
             self.servers[dest].send(msg.serialize())
         else:
-            raise Exception(f"Server {dest} is not connected")
+            logging.warning(f"Server {dest} is not connected")
    
     def sendToSwitch(self, msg: Message, dest: str):
-        raise NotImplementedError
-        # if self.topology.get(dest) is not None:
-        #     self.topology
+        name = dest.split('_')[0]
+        if self.routingTable.get(dest) is not None:
+            try:
+                self.routingTable[name].send(msg.serialize())
+            except:
+                logging.error(f"Cannot send message to switch {name}")
+        else:
+            logging.warning(f"Switch {name} is not in routing table")
 
     def forward(self, msg: Message):
         lb = f"{self.name}_{LB_TO_SWITCH_PORT}"
@@ -102,6 +115,34 @@ class Switch:
             else:
                 self.sendToSwitch(msg, dest)
 
+    def connectSwitchLoop(self):
+        while True:
+            c, addr = self.switchSocket.accept()
+            message_bytes = self.name.encode('utf-8')
+            padded_message = message_bytes.ljust(BUFFER_SIZE, b'\x00')
+            c.send(padded_message)
+            res = c.recv(BUFFER_SIZE)
+            padded_name = res.decode('utf-8')
+            name = padded_message[:padded_name.index('\x00')]
+            logging.critical(f"Connected to switch {name}")
+            self.servers[name] = c
+            recvThd = Thread(target=self.recvThd, args=(name,))
+            recvThd.start()        
+
+    def addSwitch(self, addr, name):
+        switchSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        switchSocket.connect((addr, SWITCH_SWITCH_PORT))
+
+        self.routingTable[name] = switchSocket
+        self.gui.updateList(list(self.routingTable.keys()))
+
+    def removeSwitch(self, name):
+        del self.routingTable[name]
+        self.gui.updateList(list(self.routingTable.keys()))
+
+    def runGUI(self):
+        self.gui = SwitchGUI(self.name, self.addSwitch, self.removeSwitch)
+        self.gui.mainloop()
 
 if __name__=="__main__":   
     logging = log.getLogger(logging.DEBUG)
