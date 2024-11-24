@@ -10,6 +10,7 @@ import log
 import struct 
 import math
 from gui import SwitchGUI
+import random
 
 class Switch:
     def __init__(self, name, topology):
@@ -120,11 +121,21 @@ class Switch:
             logging.warning(f"Switch {name} is not in routing table")
 
     def forward(self, msg: Message):
-        dest = msg.dest
-        if dest.split('_')[0] == self.name:
-            self.sendToServer(msg, dest)
-        else:
-            self.sendToSwitch(msg, dest)
+        lb = f"{self.name}_{LB_TO_SWITCH_PORT}"
+        
+        if msg.source.split('_')[1] == 'client':
+            servers = set(self.servers.keys())
+            servers.discard(lb)
+            self.sendToServer(msg, random.choice(list(servers)))
+        else:        
+            dest = msg.dest
+            if dest.split('_')[0] == self.name:
+                if dest.split('_')[1] == 'client':
+                    self.sendToServer(msg, lb)
+                else:
+                    self.sendToServer(msg, dest)
+            else:
+                self.sendToSwitch(msg, dest)
 
     def addSwitch(self, addr, name):
         self.routingTable[name] = addr
