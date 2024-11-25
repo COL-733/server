@@ -69,7 +69,10 @@ class Server():
                 response = Message.receive_all(self.socket.recvfrom)
 
                 msg: Message = Message.deserialize(response)
-                logging.info(f"Received Message: {msg}")
+                if msg.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
+                    logging.debug(f"Received Message: {msg}")
+                else:
+                    logging.info(f"Received Message: {msg}")
                 with self.cv:
                     self.cmdQueue.put(msg)
                     self.cv.notify()
@@ -118,7 +121,7 @@ class Server():
             else:
                 new_vc = VectorClock()
                 for vc in vcs:
-                    new_vc = new_vc.merge(VectorClock(vc))
+                    new_vc.merge(VectorClock(vc))
                 
             return VersionedValue(value[0],new_vc)
         
@@ -132,14 +135,16 @@ class Server():
         msgid = msg.id
         key = msg.kwargs["key"]
 
-        logging.info(f"Proccesing message: {msgid}")
         if req_type in {MessageType.GET, MessageType.PUT}:
             return False
 
         elif req_type in {MessageType.GET_RES, MessageType.PUT_ACK}:
             if msgid in self.operations:
                 op = self.operations[msgid]
-                res = self.deserialize_res(msg.kwargs["res"]) if "res" in msg.kwargs else None
+                if req_type is MessageType.PUT_ACK:
+                    res = None
+                else:
+                    res = self.deserialize_res(msg.kwargs["res"]) if msg.kwargs["res"] is not None else None 
                 op.handle_response(res)
             return True
 
@@ -150,16 +155,15 @@ class Server():
 
                 res = self.get(key)
                 # Only send if we've a legit GET_RESPONSE
-                if not res==None:
-                    kw["res"] = self.serialize_res(res)
-                    logging.info(f"{res}")
-                    response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
-                    self.send(response)
+                # if not res==None:
+                kw["res"] = self.serialize_res(res) if res else None
+                response = Message(msgid, MessageType.GET_RES, self.name, msg.source, kw)
+                self.send(response)
 
             elif req_type == MessageType.PUT_KEY:
                 # Put the same version got from the coordinator
                 
-                versioned_value = self.deserialize_put(msg.kwargs["value"], msg.kwargs["context"] )
+                versioned_value = self.deserialize_put([msg.kwargs["value"]], [msg.kwargs["context"]] )
 
                 if versioned_value:
                     self.put(key, versioned_value.value, versioned_value.vector_clock)
@@ -192,52 +196,49 @@ class Server():
                 logging.info(f"Got required Get Responses  (id, key): {op.id, op.key}")
             else:
                 logging.info(f"Got required Put Acks  (id, key): {op.id, op.key}")
+            
+            if op.resList: 
+                op.syn_reconcile()
 
-            op.syn_reconcile()
             self.send(op.reply_msg(self.name))
+            logging.info(f"Operation Completed (id, key, type): {op.id, op.key, op.type}")
             del self.operations[req.id]
-            logging.info(f"Operation Completed (id, key): {op.id, op.key}")
 
     def ini_operation(self, req: Message, op_thread: Thread) -> None:
         """Add & initialize the operation for given request.(GET or PUT)"""
         key = req.kwargs["key"]
-
         # Check wether we've key or not
         op = None
         if self.ring.check_key(key): # we're coordinator
-            
-            if self.storage.exists(key): # initiate operation with own response or ack
 
-                if req.msg_type == MessageType.GET:
+            if req.msg_type == MessageType.GET:
+                if self.storage.exists(key):
                     res = self.get(key)
                     op = Operation(op_thread, req, True, res=res)
-
                 else:
-                    if "context" in req.kwargs:
-                        # update the our version in context(context is instanvce of VectorClock)
-                        if not self.kv.exists(key):
-                            self.kv.add_key(key)
-                        else:
-                            self.kv.inc_version(key)
+                    op = Operation(op_thread, req, True)
+            else:
 
-                        version = self.kv.get_version(key)
+                if not self.kv.exists(key):
+                    self.kv.add_key(key)
+                else:
+                    self.kv.inc_version(key)
 
-                        versioned_value = self.deserialize_put(req.kwargs["value"], req.kwargs["context"] )
+                version = self.kv.get_version(key)
 
-                        versioned_value.vector_clock.add(self.name, version)
+                if "context" in req.kwargs:
+                    # update the our version in context(context is instanvce of VectorClock)
+                    versioned_value = self.deserialize_put([req.kwargs["value"]], req.kwargs["context"] )
+                else:
+                    versioned_value = VersionedValue(req.kwargs["value"], VectorClock() )
 
-                        self.put(key, versioned_value.value , versioned_value.vector_clock)
-                        
-                        op = Operation(op_thread, req, True, acks=1, value=versioned_value)
-                    else:
-                        logging.error(f'Operation for {key} was not created: "context" not found in message {req.id}.')
+                versioned_value.vector_clock.add(self.name, version)
 
-            else: # initiate response without pre-providing
-
-                op = Operation(op_thread, req, True)
+                self.put(key, versioned_value.value , versioned_value.vector_clock)
+                
+                op = Operation(op_thread, req, True, value=versioned_value)
 
         else: # we're sub coordinator
-
             op = Operation(op_thread, req, False)
         
         self.operations[req.id] = op    # Add operation
@@ -248,6 +249,8 @@ class Server():
             with self.cv:
                 while self.cmdQueue.empty():
                     self.cv.wait()
+
+            
             req = self.cmdQueue.get()
 
             if req.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
@@ -261,9 +264,6 @@ class Server():
 
                 if req.msg_type in {MessageType.GET, MessageType.PUT}:
                     self.ini_operation(req,op_thread)  # make opeartion
-                    # logging.info(f"Operation Created for (id, key)=({req.id}, {req.kwargs["key"]})")
-
-            logging.info(f"Request Processed: {req.id}")
 
     def get(self, key: str) -> Optional[set[VersionedValue]]:
         """Retrieve a value by key from local storage."""
@@ -285,24 +285,28 @@ class Server():
     def gossip(self): # Thread
         logging.info(f"Starting Gossip...")
         while True:
-            time.sleep(config.I)
             logging.debug(f"Known Servers: {list(self.ring.serverSet)}, Ring State: {str(list(self.ring.state))}")
             gossipSet = self.ring.serverSet
             gossipSet.discard(self.name)
 
             if len(gossipSet) == 0:
                 logging.warning("No Server To Gossip")
+                time.sleep(config.I) 
                 continue
             gossipList = random.sample(list(gossipSet), min(len(gossipSet), config.G))
             for server in gossipList:
                 message = Message(-1, MessageType.GOSSIP_REQ, self.name, server, {'ring': self.ring})
                 self.send(message)
+            time.sleep(config.I) 
 
     def handle_gossips(self, msg: Message):
         # merge incoming ring
         addedNodes, deletedNodes = self.ring.merge(msg.kwargs['ring'])
         if addedNodes or deletedNodes:
-            self.gui.updateRing(self.ring)
+            try:
+                self.gui.updateRing(self.ring)
+            except:
+                pass
         for node in addedNodes:
             logging.critical(f"Added new node of server {node.server} at position {node.pos}")
         for node in deletedNodes:
@@ -314,14 +318,6 @@ class Server():
 
     def handle_hinted_handoffs(): # Thread
         raise NotImplementedError
-
-    def cleanup_operations(self):
-        while True:
-            time.sleep(60)  # Run cleanup every 60 seconds
-            to_remove = [key for key, op in self.operations.items() if op.is_complete()]
-            # with self.lock:
-            for key in to_remove:
-                del self.operations[key]
 
     def shutdown(self):
         """Shutdown the server, delete the database, close the socket, and reset variables."""
@@ -336,8 +332,10 @@ class Server():
 
         # Step 2: Delete the database file
         db_path = f"{self.switch_name}/{self.name}_storage.db"
+        kvdb_path = f"{self.switch_name}/{self.name}_key_versions.db"
         try:
             os.remove(db_path)
+            os.remove(kvdb_path)
             logging.info(f"[Server] Database '{db_path}' deleted.")
         except FileNotFoundError:
             logging.error(f"[Server] Database '{db_path}' does not exist, nothing to delete.")

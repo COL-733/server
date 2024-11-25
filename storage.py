@@ -2,6 +2,7 @@ import pickle
 import threading
 from typing import Any, Optional
 import bsddb3
+import os
 
 class VectorClock:
     def __init__(self, clock: dict[str, int] = None):
@@ -74,7 +75,15 @@ class VersionedValue:
 
 class KeyVersion:
     def __init__(self, db_path: str) -> None:
-        self.db = bsddb3.hashopen(db_path, 'c')
+
+        if os.path.exists(db_path):
+            # Load the existing database
+            print(f"Loading existing database at {db_path}.")
+            self.db = bsddb3.hashopen(db_path, 'w')  # Open in read/write mode
+        else:
+            # Create a new database
+            print(f"Database not found at {db_path}. Creating a new one.")
+            self.db = bsddb3.hashopen(db_path, 'c')  # Create if it doesn't exist
 
     def encode(self, key: str) -> bytes:
         """Convert an integer key to a bytes representation."""
@@ -85,19 +94,22 @@ class KeyVersion:
         key_bytes = self.encode(key)
 
         if not self.db.has_key(key_bytes):
-            self.db[key_bytes] = 0
+            self.db[key_bytes] = pickle.dumps(0)
 
     def get_version(self, key: str) -> int:
         """Return version of the key"""
         key_bytes = self.encode(key)
 
-        return self.db[key_bytes]
+        return int(pickle.loads(self.db[key_bytes]))
     
     def inc_version(self, key: str):
         """Increse version of the key."""
         key_bytes = self.encode(key)
 
-        self.db[key_bytes] += 1
+        ver = int(pickle.loads(self.db[key_bytes]))
+        ver+=1
+
+        self.db[key_bytes] = pickle.dumps(ver)
     
     def exists(self, key: str) -> bool:
         key_bytes = self.encode(key)
@@ -106,7 +118,15 @@ class KeyVersion:
 
 class Storage:
     def __init__(self, db_path: str):
-        self.db = bsddb3.hashopen(db_path, 'c')
+
+        if os.path.exists(db_path):
+            # Load the existing database
+            print(f"Loading existing database at {db_path}.")
+            self.db = bsddb3.hashopen(db_path, 'w')  # Open in read/write mode
+        else:
+            # Create a new database
+            print(f"Database not found at {db_path}. Creating a new one.")
+            self.db = bsddb3.hashopen(db_path, 'c')  # Create if it doesn't exist
         self.lock = threading.Lock()
 
     def encode(self, key: str) -> bytes:

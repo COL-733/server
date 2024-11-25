@@ -7,6 +7,7 @@ from server import Server
 from load_balancer import LoadBalancer
 from storage import VectorClock, VersionedValue
 from message import Message, MessageType   
+from config import *
 
 class Client:
     def __init__(self, server_host: str, server_port: int):
@@ -35,7 +36,7 @@ class Client:
         self.socket.close()
 
 def test_request():
-    client = Client('localhost', 4000)
+    client = Client('localhost', LB_PORT)
     
     try:
         client.connect()
@@ -95,7 +96,7 @@ def main():
         switch_name = "delhi"
 
         if args[0] == "run":
-            cl = Client('',4000)
+            cl = Client('',LB_PORT)
             cl.connect()
 
         if args[0] == "clear":
@@ -105,14 +106,14 @@ def main():
         if args[0] == "put":
             if args[1] == "all":
                 for i in range(1,9):
-                    msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{4000}", f"{switch_name}_{args[2]}" ,
+                    msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{LB_PORT}", f"{switch_name}_{args[2]}" ,
                                 {"key": "1", "value": [f"value{i}"], "context": [temp[f"context{i}"].to_dict()] })
                     
                     # print({"key":args[1], "value": f"value{args[1]}", "context": temp[f"context{args[1]}"] })
                     id+=1
                     cl.socket.send(msg.serialize())
             else:
-                msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{4000}", f"{switch_name}_{args[2]}" ,
+                msg = Message(id, MessageType.PUT_KEY, f"{switch_name}_{LB_PORT}", f"{switch_name}_{args[2]}" ,
                             {"key": "1", "value": [f"value{args[1]}"], "context": [temp[f"context{args[1]}"].to_dict()] })
                 
                 # print({"key":args[1], "value": f"value{args[1]}", "context": temp[f"context{args[1]}"] })
