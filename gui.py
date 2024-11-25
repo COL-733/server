@@ -131,3 +131,42 @@ class SwitchGUI():
 
     def mainloop(self):
         self.r.mainloop()
+
+
+class ClientGUI:
+    def __init__(self, name, add, sync):
+        self.r = tk.Tk()
+        self.r.title(f"Client: {name}")
+        self.add_fn = add
+        self.sync_fn = sync
+
+        self.addEntry = tk.Entry(self.r, width=8)
+        self.addEntry.grid(row=0, column=0, padx=2, pady=2, sticky=tk.W)
+
+        addButton = tk.Button(self.r, text='Add to Cart', width=10, command=self.addToCart)
+        addButton.grid(row=0, column=1, pady=2)
+
+        addLabel = tk.Label(self.r, text="My Cart:")
+        addLabel.grid(row=1, column=0, sticky=tk.W, pady=2)
+
+        self.itemsList = tk.Listbox(self.r, height=5, selectmode='multiple')
+        self.itemsList.grid(row=2, column=0, sticky=tk.W, pady=2)
+    
+        syncButton = tk.Button(self.r, text='Sync Cart', width=10, command=self.syncCart)
+        syncButton.grid(row=3, column=0, pady=2)        
+
+    def addToCart(self):
+        item = self.addEntry.get()
+        self.add_fn([item])
+    
+    def syncCart(self):
+        self.sync_fn()
+
+    def updateList(self, cart):
+        self.itemsList.delete(0, tk.END)
+        for i in range(len(cart)):
+            item = cart[i]
+            self.itemsList.insert(i, item) 
+
+    def mainloop(self):
+        self.r.mainloop()

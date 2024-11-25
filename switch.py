@@ -76,7 +76,10 @@ class Switch:
                     break
 
                 message: Message = Message.deserialize(response)
-                logging.info(f"Received Message: {message}")
+                if message.msg_type in {MessageType.GOSSIP_REQ, MessageType.GOSSIP_RES}:
+                    logging.debug(f"Received Message: {message}")
+                else:
+                    logging.info(f"Received Message: {message}")
                 with self.cv:
                     self.request_queue.put(message)
                     self.cv.notify()
@@ -154,7 +157,7 @@ class Switch:
         self.gui.mainloop()
 
 if __name__=="__main__":   
-    logging = log.getLogger(logging.DEBUG)
+    logging = log.getLogger(logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('-sw', help = "Switch Name", required=True)
     args = parser.parse_args() 

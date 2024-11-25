@@ -111,7 +111,7 @@ class Ring:
         return int(md5.hexdigest(), 16) % config.Q
 
     def check_key(self, key: int):
-        return self.serverName in set(self.getPrefList(key))    
+        return self.serverName in set(self.getPrefList(str(key)))    
 
     def getPrefList(self, key: str) -> list[str]:
         totalTokens = len(self.state)
@@ -126,18 +126,18 @@ class Ring:
         uniqueNodes = set()
         prefList = []
         i = 0
-        while len(prefList) < self.N:
+        while len(prefList) < config.N:
             idx = (coord+i) % totalTokens
             v = self.state[idx]
             if v.server not in uniqueNodes:
                 uniqueNodes.add(v.server)
                 prefList.append(idx)
-            
+            i += 1
             # if i loops over, break
             if i > config.N:
                 break
         
-        return prefList
+        return [self.state[v].server for v in prefList]
 
     def add(self, pos):
         self.state.add(VirtualNode(self.serverName, pos))
