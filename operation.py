@@ -23,6 +23,8 @@ class Operation:
         # To maintain the responses
         self.acks: int = acks # Initialize with 1 for own ack
         self.resList: set[VersionedValue] = res # for get initialize with own response
+
+        self.lst_times : dict[str,tuple]={}
     
     def start(self) -> None:
         """Start the Opeartion thread."""

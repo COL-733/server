@@ -49,6 +49,46 @@ class Server():
         self.cmdThread = Thread(target=self.command_handler)
         self.gossipThread = Thread(target=self.gossip)
         self.guiThread = Thread(target=self.runGUI)
+        self.hinted_thread = Thread(target=self.back_from_hinted)
+
+        self.hinted_queue : Queue = Queue()
+
+    def send_from_hinted(self):
+        while True : 
+            # remove entries from the hinted_queue and for 
+            while self.hinted_queue.empty():
+                time.sleep(0.1)
+            req = self.hinted_queue.get()
+            old_server = req.kwargs.get("hinted") # delhi_5000
+            # try to check with the the delhi 5000 server
+            req.source= self.name
+            req.dest= old_server
+            req.kwargs.update("hinted",0)
+            self.send(req)
+
+    def monitor_thread(self,op : Operation):
+        net_failed = 0
+        net_success = 0 
+        while True : 
+            for ser, ws in op.lst_times.items():
+                last = ws[0]
+                cur = int(time.time())
+                diff = cur - last
+                if diff > 0.2: 
+                    net_failed +=1
+                    logging.critical(f"{ser} is facing heartbeat timeouts")
+                    # need to do the hinted for this one
+                    self.handle_hinted_handoffs(ser,net_failed,ws[1].id)
+                if last == -1 :
+                    net_success +=1 
+                op.lst_times.pop[ser]
+            if op.type == MessageType.GET : 
+                if net_success == config.R :
+                    return
+            else :
+                if net_success == config.W :
+                    return
+            
 
     def connect_to_switch(self) -> None: # Connect to switch
         """At booting, connect to the Switch."""
@@ -69,6 +109,9 @@ class Server():
 
                 msg: Message = Message.deserialize(response)
                 logging.info(f"Received Message: {msg}")
+                if "hinted" in msg.kwargs:
+                    if msg.kwargs.get("hinted") == 1 :  # coordinator se aa rhi hai
+                        self.hinted_queue.put(msg)
                 with self.cv:
                     self.cmdQueue.put(msg)
                     self.cv.notify()
@@ -100,8 +143,10 @@ class Server():
             return False
 
         elif req_type in {MessageType.GET_RES, MessageType.PUT_ACK}:
+            
             if msgid in self.operations:
                 op = self.operations[msgid]
+                op.lst_times[self.name] = (-1,msg)
                 res = msg.kwargs["res"] if "res" in msg.kwargs else None
                 op.handle_response(self.deserialize_res(res))
             return True
@@ -133,11 +178,17 @@ class Server():
             target = prefList if op.isCord else [random.choice(prefList)]
             for server in target:
                 self.send(op.response_msg(self.name, server))
+                if op.isCord :
+                    op.lst_times[server] = (time.time(),op.response_msg(self.name, server))
 
             op.cv.wait()  # Synchronize and wait for responses
             op.syn_reconcile()
             self.send(op.reply_msg(self.name))
             del self.operations[req.id]
+            monitoring_op = Thread(target=self.monitor_thread,args=op)
+            monitoring_op.start()
+            monitoring_op.join()
+                
 
     def ini_operation(self, req: Message, op_thread: Thread) -> None:
         """Add & initialize the operation for given request.(GET or PUT)"""
@@ -245,8 +296,14 @@ class Server():
             message = Message(-1, MessageType.GOSSIP_RES, self.name, msg.source, {'ring': self.ring})
             self.send(message)
 
-    def handle_hinted_handoffs(): # Thread
-        raise NotImplementedError
+    def handle_hinted_handoffs(self,ser:str, i:int,msg_id): # Thread
+        # will try to handoff ith time
+        op = self.operations.get(msg_id) 
+        server_hinted = self.ring.give_next_hinted(i,op.key)
+        msg = op.response_msg(self.name, server_hinted)
+        msg.kwargs.update("hinted",ser)
+        self.send(msg)
+        op.lst_times[server] = (time.time(),op.response_msg(self.name, server))
 
     def cleanup_operations(self):
         while True:
@@ -307,6 +364,9 @@ class Server():
         
         self.gossipThread.daemon = True
         self.gossipThread.start()
+
+        self.hinted_thread.daemon = True 
+        self.hinted_thread.start()
 
         self.guiThread.start()
         
